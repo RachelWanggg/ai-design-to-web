@@ -1,5 +1,5 @@
 <script setup>
-import { Github, Images, LayoutDashboard, RefreshCw, WandSparkles, Workflow } from 'lucide-vue-next'
+import { Github, Home, Images, LayoutDashboard, RefreshCw, WandSparkles, Workflow } from 'lucide-vue-next'
 import ModelSettingsPanel from './ModelSettingsPanel.vue'
 
 defineProps({
@@ -25,17 +25,21 @@ defineEmits(['refresh'])
 
     <div class="header-actions">
       <nav class="app-nav" aria-label="页面导航">
-        <a class="nav-link" :class="{ 'is-active': activePage === 'dashboard' }" href="/">
+        <a class="nav-link" :class="{ 'is-active': activePage === 'welcome' }" href="/">
+          <Home :size="16" />
+          开始
+        </a>
+        <a class="nav-link" :class="{ 'is-active': activePage === 'image-make' }" href="/image-make">
+          <Images :size="16" />
+          生成工作台
+        </a>
+        <a class="nav-link" :class="{ 'is-active': activePage === 'dashboard' }" href="/dashboard">
           <LayoutDashboard :size="16" />
           控制台
         </a>
         <a class="nav-link" :class="{ 'is-active': activePage === 'make' }" href="/make">
           <WandSparkles :size="16" />
-          Make
-        </a>
-        <a class="nav-link" :class="{ 'is-active': activePage === 'image-make' }" href="/image-make">
-          <Images :size="16" />
-          单图生成
+          高级模式
         </a>
       </nav>
       <a class="icon-link" href="https://github.com" target="_blank" rel="noreferrer" title="GitHub">

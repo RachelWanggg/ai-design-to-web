@@ -7,6 +7,8 @@ dist/
 *.log
 tmp/
 coverage/
+.codegraph/
+docs/
 backend/data/*.json
 backend/data/*.sqlite
 backend/data/*.sqlite-*
