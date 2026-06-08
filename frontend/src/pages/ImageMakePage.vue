@@ -119,6 +119,95 @@ const currentHistoryTitle = computed(() => {
   if (!activeHistoryId.value) return '新项目'
   return historyEntries.value.find((item) => item.id === activeHistoryId.value)?.title || '已保存项目'
 })
+const workflowStepDefinitions = [
+  { id: 'requirement', label: '需求', title: '描述页面目标', summary: '写清页面类型、核心内容、视觉方向，并可上传参考图。' },
+  { id: 'design', label: '设计', title: '生成 UI 设计图', summary: '生成或确认第一张高保真移动端 UI 设计图。' },
+  { id: 'assets', label: '资产', title: '生成页面资产', summary: '由 Gemini 判断切图数量，再生成复杂视觉和专属小图标。' },
+  { id: 'html', label: 'HTML', title: '生成 HTML 页面', summary: '用设计图和资产生成可预览的移动端 HTML。' },
+  { id: 'review', label: '复核', title: '检查并修复结果', summary: '对比设计图和 HTML 截图，必要时补资产并修复代码。' },
+  { id: 'export', label: '导出', title: '导出项目文件', summary: '下载 HTML、素材包、项目 JSON 或 Figma 导入包。' }
+]
+const runningWorkflowStepId = computed(() => {
+  if (runningStep.value === 'design') return 'design'
+  if (['assets', 'missing-assets', 'html-review-assets'].includes(runningStep.value)) return 'assets'
+  if (runningStep.value === 'html') return 'html'
+  if (runningStep.value === 'html-repair') return 'review'
+  if (runningStep.value.startsWith('export')) return 'export'
+  return ''
+})
+const currentWorkflowStepId = computed(() => {
+  if (runningWorkflowStepId.value) return runningWorkflowStepId.value
+  if (!prompt.value.trim()) return 'requirement'
+  if (!design.value?.resultUrl) return 'design'
+  if (!assets.value.length) return 'assets'
+  if (!htmlSource.value) return 'html'
+  if (!activeHtmlReview.value && !visualReviewText.value) return 'review'
+  return 'export'
+})
+const currentWorkflowStepIndex = computed(() => {
+  return Math.max(0, workflowStepDefinitions.findIndex((step) => step.id === currentWorkflowStepId.value))
+})
+const workflowSteps = computed(() => {
+  return workflowStepDefinitions.map((step, index) => {
+    const completed = (
+      (step.id === 'requirement' && Boolean(prompt.value.trim())) ||
+      (step.id === 'design' && Boolean(design.value?.resultUrl)) ||
+      (step.id === 'assets' && assets.value.length > 0) ||
+      (step.id === 'html' && Boolean(htmlSource.value)) ||
+      (step.id === 'review' && Boolean(activeHtmlReview.value || visualReviewText.value)) ||
+      (step.id === 'export' && Boolean(exportStatus.value))
+    )
+    return {
+      ...step,
+      status: step.id === currentWorkflowStepId.value ? 'active' : completed ? 'completed' : index < currentWorkflowStepIndex.value ? 'available' : 'pending'
+    }
+  })
+})
+const currentWorkflowStep = computed(() => workflowSteps.value[currentWorkflowStepIndex.value] || workflowSteps.value[0])
+const workflowProgressPercent = computed(() => {
+  return `${Math.round((currentWorkflowStepIndex.value / Math.max(1, workflowSteps.value.length - 1)) * 100)}%`
+})
+const primaryWorkflowAction = computed(() => {
+  const isRunning = Boolean(runningStep.value)
+  if (currentWorkflowStepId.value === 'assets') {
+    return {
+      label: runningStep.value === 'assets' ? '正在生成资产' : assets.value.length ? '重新生成页面资产' : '生成页面资产',
+      hint: '会先自动判断切图数量，再生成复杂视觉资产。',
+      disabled: !canRunAssets.value,
+      icon: 'assets'
+    }
+  }
+  if (currentWorkflowStepId.value === 'html') {
+    return {
+      label: runningStep.value === 'html' ? '正在生成 HTML' : htmlSource.value ? '重新生成 HTML' : '生成 HTML 页面',
+      hint: '保留当前设计图和 asset-map，用 Gemini + GPT 完成 HTML 闭环。',
+      disabled: !canRunHtml.value,
+      icon: 'html'
+    }
+  }
+  if (currentWorkflowStepId.value === 'review') {
+    return {
+      label: runningStep.value === 'html-repair' ? '正在复核修复' : '复核并修复 HTML',
+      hint: '对比设计图和 HTML 截图，必要时补切图并重写当前 HTML。',
+      disabled: !canRunHtmlReviewRepair.value,
+      icon: 'review'
+    }
+  }
+  if (currentWorkflowStepId.value === 'export') {
+    return {
+      label: exportStatus.value === '正在打包 HTML 与素材' ? '正在导出素材包' : '导出 HTML 素材包',
+      hint: exportStatus.value || '下载可交接的 HTML、素材和项目说明。',
+      disabled: !hasProjectOutput.value || isRunning,
+      icon: 'export'
+    }
+  }
+  return {
+    label: runningStep.value === 'design' ? '正在生成 UI 设计图' : design.value ? '重新生成 UI 设计图' : '生成 UI 设计图',
+    hint: '先得到一张可作为后续切图和 HTML 还原基准的设计图。',
+    disabled: !canRunDesign.value,
+    icon: 'design'
+  }
+})
 
 const workflowStages = {
   design: {
@@ -2916,6 +3005,27 @@ async function ensureExportScreenshot() {
   htmlScreenshotDataUrl.value = await captureHtmlPreviewScreenshot(htmlSource.value)
 }
 
+function runPrimaryWorkflowAction() {
+  if (primaryWorkflowAction.value.disabled) return
+  if (currentWorkflowStepId.value === 'assets') {
+    generateAssets()
+    return
+  }
+  if (currentWorkflowStepId.value === 'html') {
+    generateHtml()
+    return
+  }
+  if (currentWorkflowStepId.value === 'review') {
+    reviewAndRepairHtml()
+    return
+  }
+  if (currentWorkflowStepId.value === 'export') {
+    exportCompletePackage()
+    return
+  }
+  generateDesign()
+}
+
 function createExportSnapshot() {
   return {
     title: currentHistoryTitle.value === '新项目' ? titleFromPrompt(prompt.value) : currentHistoryTitle.value,
@@ -2954,28 +3064,41 @@ onMounted(() => {
     <section class="image-make-hero">
       <div>
         <p class="eyebrow">Image Make</p>
-        <h2>单图到切图再到 HTML</h2>
-        <p>像 Figma Make 一样用对话驱动：先生成一张 UI 设计图，再生成对应切图，最后把设计图和切图还原成 HTML。</p>
+        <h2>生成工作台</h2>
+        <p>按需求、设计、资产、HTML、复核、导出的顺序推进；高级日志、报告和重跑入口仍保留在细节区域。</p>
       </div>
-      <div class="image-make-export-actions">
-        <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="downloadProjectJson">
-          <FileDown :size="16" />
-          项目 JSON
+      <div class="current-step-action">
+        <span>当前步骤：{{ currentWorkflowStep.label }}</span>
+        <strong>{{ currentWorkflowStep.title }}</strong>
+        <p>{{ currentWorkflowStep.summary }}</p>
+        <button class="button button-primary" type="button" :disabled="primaryWorkflowAction.disabled" @click="runPrimaryWorkflowAction">
+          <Sparkles v-if="primaryWorkflowAction.icon === 'design' || primaryWorkflowAction.icon === 'review'" :size="17" />
+          <Layers3 v-else-if="primaryWorkflowAction.icon === 'assets'" :size="17" />
+          <Code2 v-else-if="primaryWorkflowAction.icon === 'html'" :size="17" />
+          <FileDown v-else :size="17" />
+          {{ primaryWorkflowAction.label }}
         </button>
-        <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="exportCompletePackage">
-          <FileDown :size="16" />
-          HTML 素材包
-        </button>
-        <button class="button button-primary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="exportFigmaPackage">
-          <FileDown :size="16" />
-          Figma 导入包
-        </button>
-        <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" title="实验导出：Figma 原生 .fig 是非公开格式，此文件用于 OpenPencil/Agent 交接。" @click="exportExperimentalFig">
-          <FileDown :size="16" />
-          实验 .fig
-        </button>
-        <small>{{ exportStatus || '导出 HTML、素材、Figma 插件包和实验 .fig' }}</small>
+        <small>{{ primaryWorkflowAction.hint }}</small>
       </div>
+    </section>
+
+    <section class="workflow-stepper" aria-label="主工作流进度">
+      <div class="workflow-progress-track">
+        <span :style="{ width: workflowProgressPercent }" />
+      </div>
+      <ol>
+        <li
+          v-for="(step, index) in workflowSteps"
+          :key="step.id"
+          :class="[`is-${step.status}`, { 'is-current': step.id === currentWorkflowStepId }]"
+        >
+          <span>{{ index + 1 }}</span>
+          <div>
+            <strong>{{ step.label }}</strong>
+            <small>{{ step.title }}</small>
+          </div>
+        </li>
+      </ol>
     </section>
 
     <section v-if="error" class="notice notice-error">
@@ -3062,7 +3185,7 @@ onMounted(() => {
 
           <section class="stage-generate-panel" aria-label="分步骤生成控制">
             <div class="stage-generate-head">
-              <span>生成控制</span>
+              <span>其他操作</span>
               <strong>{{ runningStep ? '执行中' : '可独立重跑' }}</strong>
             </div>
 
@@ -3071,7 +3194,7 @@ onMounted(() => {
               新建任务
             </button>
 
-            <button class="button button-primary" type="button" :disabled="!canRunDesign" @click="generateDesign">
+            <button class="button button-secondary" type="button" :disabled="!canRunDesign" @click="generateDesign">
               <Send :size="16" />
               {{ runningStep === 'design' ? '生成 UI 设计图中' : design ? '重新生成 UI 设计图' : '生成 UI 设计图' }}
             </button>
@@ -3109,7 +3232,7 @@ onMounted(() => {
               {{ runningStep === 'html-repair' ? '双模型复核修复中' : '复核并修复 HTML' }}
             </button>
 
-            <p>各阶段可以独立重跑。重跑 UI 会清空旧切图和 HTML；重跑切图会清空旧 HTML；扫描并生成缺失切图会追加资产并清空旧 HTML；复核修复会对比设计图和 HTML 截图，必要时补切图并重写当前 HTML。</p>
+            <p>这些入口用于重跑或补齐细节。当前步骤的主操作已经提升到页面顶部。</p>
           </section>
 
           <section class="image-history-panel" aria-label="单图生成历史">
@@ -3135,6 +3258,32 @@ onMounted(() => {
               </button>
             </div>
             <p v-else>生成后的 UI、切图和 HTML 会自动保存到本地与 SQLite。点击历史项可切换查看，并直接继续后续阶段。</p>
+          </section>
+
+          <section class="secondary-export-panel" aria-label="导出与交接">
+            <div class="stage-generate-head">
+              <span>导出与交接</span>
+              <strong>{{ exportStatus || '准备就绪' }}</strong>
+            </div>
+            <div class="image-make-export-actions">
+              <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="downloadProjectJson">
+                <FileDown :size="16" />
+                项目 JSON
+              </button>
+              <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="exportCompletePackage">
+                <FileDown :size="16" />
+                HTML 素材包
+              </button>
+              <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="exportFigmaPackage">
+                <FileDown :size="16" />
+                Figma 导入包
+              </button>
+              <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" title="实验导出：Figma 原生 .fig 是非公开格式，此文件用于 OpenPencil/Agent 交接。" @click="exportExperimentalFig">
+                <FileDown :size="16" />
+                实验 .fig
+              </button>
+              <small>{{ exportStatus || '导出 HTML、素材、Figma 插件包和实验 .fig。' }}</small>
+            </div>
           </section>
         </form>
       </aside>

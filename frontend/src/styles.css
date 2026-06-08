@@ -3375,6 +3375,8 @@ li {
 
 .single-asset-grid .empty-output {
   grid-column: 1 / -1;
+  grid-row: span 34;
+  min-height: 220px;
   border: 1px dashed var(--border-strong);
   border-radius: 8px;
   background: #fff;
