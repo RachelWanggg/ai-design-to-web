@@ -131,6 +131,19 @@ onBeforeUnmount(() => {
         </header>
 
         <form id="model-settings-form" class="settings-body" @submit.prevent="saveSettings">
+          <section class="model-setup-guide">
+            <div>
+              <span>第一步</span>
+              <strong>先配置 GPT Image 2 图像模型</strong>
+              <p>生成第一张 UI 设计图只需要 `CN API · GPT Image 2`：确认 Base URL、模型名 `gpt-image-2`、API Key，然后保存。</p>
+            </div>
+            <div>
+              <span>完整链路</span>
+              <strong>再配置 GPT-5.5 和 Gemini</strong>
+              <p>生成 HTML、复核和修复需要 `GPT-5.5 文本与代码模型` 与 `Gemini 3.1 Pro 视觉理解模型`。</p>
+            </div>
+          </section>
+
           <label class="runtime-toggle">
             <input id="model-settings-browser-direct" v-model="draft.browserDirectEnabled" name="browserDirectEnabled" type="checkbox" />
             <span>

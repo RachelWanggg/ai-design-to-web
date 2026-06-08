@@ -210,14 +210,20 @@ onMounted(() => {
       </section>
 
       <div v-else-if="projectCards.length" class="project-card-grid">
-        <article v-for="project in projectCards" :key="project.id" class="project-card">
+        <article
+          v-for="project in projectCards"
+          :key="project.id"
+          class="project-card"
+          :class="{ 'is-failed': project.failureState }"
+        >
           <header>
-            <span class="project-stage-pill">{{ project.currentStage }}</span>
+            <span class="project-stage-pill">{{ project.failureState ? '需恢复' : project.currentStage }}</span>
             <small><Clock3 :size="13" /> {{ project.updatedLabel }}</small>
           </header>
           <div>
             <h3>{{ project.title }}</h3>
-            <p>{{ project.prompt || '项目需求保存在历史快照中。' }}</p>
+            <p v-if="project.failureState">{{ project.failureState.label }}失败：{{ project.failureState.message }}</p>
+            <p v-else>{{ project.prompt || '项目需求保存在历史快照中。' }}</p>
           </div>
           <footer>
             <span><Layers3 :size="14" /> {{ project.artifactStatus }}</span>

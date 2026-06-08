@@ -183,7 +183,11 @@ onMounted(() => {
           <Clock3 :size="17" />
           <span>
             <strong>{{ project.title }}</strong>
-            <small>{{ project.currentStage }} · {{ project.artifactStatus }} · {{ project.updatedLabel }}</small>
+            <small>
+              {{ project.failureState ? '需恢复' : project.currentStage }} ·
+              {{ project.failureState ? project.failureState.retryAction : project.artifactStatus }} ·
+              {{ project.updatedLabel }}
+            </small>
           </span>
           <ArrowRight :size="16" />
         </a>

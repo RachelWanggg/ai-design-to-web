@@ -4,7 +4,14 @@ import html2canvas from 'html2canvas'
 import { CheckCircle2, Code2, Download, FileDown, Image, Layers3, LoaderCircle, Send, Settings2, Sparkles, Upload, X } from 'lucide-vue-next'
 import { ensureBrowserDirectEnabled, loadAgentRuntimeSettings, runBrowserAgent } from '../services/agentRuntime'
 import { getImageMakeRuns, saveImageMakeRun } from '../services/api'
-import { STUDIO_TEMPLATES, getStudioTemplate, getStudioTemplateHref } from '../services/projectHistory'
+import {
+  STUDIO_TEMPLATES,
+  getFailureRetryLabel,
+  getFailureStepLabel,
+  getStudioTemplate,
+  getStudioTemplateHref,
+  normalizeImageMakeProject
+} from '../services/projectHistory'
 import {
   buildProjectJson,
   downloadCompleteProjectPackage,
@@ -48,6 +55,7 @@ const historyEntries = ref([])
 const activeHistoryId = ref('')
 const historySyncStatus = ref('')
 const exportStatus = ref('')
+const lastFailure = ref(null)
 const activeInspectorTab = ref('status')
 const runtimeSettings = ref(loadAgentRuntimeSettings())
 const studioTemplates = STUDIO_TEMPLATES
@@ -101,6 +109,7 @@ const htmlReviewPendingMissingAssetPlan = computed(() => getPendingHtmlReviewMis
 const htmlReviewPendingMissingAssets = computed(() => htmlReviewPendingMissingAssetPlan.value.assets || [])
 const canGenerateHtmlReviewMissingAssets = computed(() => Boolean(design.value?.resultUrl && htmlReviewPendingMissingAssets.value.length) && !runningStep.value)
 const hasProjectOutput = computed(() => Boolean(design.value || assets.value.length || htmlSource.value))
+const hasPersistableProject = computed(() => Boolean(hasProjectOutput.value || prompt.value.trim() || lastFailure.value))
 const activeReferenceImages = computed(() => (useReferenceImages.value ? referenceImages.value : []))
 const activeReferenceImage = computed(() => {
   if (!referenceImages.value.length) return null
@@ -124,6 +133,33 @@ const currentHistoryTitle = computed(() => {
   return historyEntries.value.find((item) => item.id === activeHistoryId.value)?.title || '已保存项目'
 })
 const modelReady = computed(() => Boolean(runtimeSettings.value?.browserDirectEnabled))
+const currentProjectModel = computed(() => normalizeImageMakeProject({
+  id: activeHistoryId.value || 'current-project',
+  title: currentHistoryTitle.value === '新项目' ? titleFromPrompt(prompt.value) : currentHistoryTitle.value,
+  prompt: prompt.value,
+  stage: currentWorkflowStepId.value,
+  designUrl: design.value?.resultUrl || '',
+  assetCount: assets.value.length,
+  htmlReady: Boolean(htmlSource.value),
+  data: {
+    prompt: prompt.value,
+    design: design.value,
+    assets: assets.value,
+    html: htmlSource.value,
+    codeReview: codeReviewText.value,
+    visualReview: visualReviewText.value,
+    htmlDualReview: htmlDualReview.value,
+    failureState: lastFailure.value,
+    exportStatus: exportStatus.value
+  },
+  updatedAt: new Date().toISOString()
+}))
+const exportReadiness = computed(() => currentProjectModel.value.exportReadiness)
+const currentContinueHint = computed(() => {
+  if (lastFailure.value) return `${lastFailure.value.label}失败。${lastFailure.value.retryAction}，已生成的产物会保留。`
+  return currentProjectModel.value.nextAction.hint
+})
+const currentModelSetupHint = computed(() => modelSetupHintForStep(currentWorkflowStepId.value, lastFailure.value?.failedStep))
 const workflowStepDefinitions = [
   { id: 'requirement', label: '需求', title: '描述页面目标', summary: '写清页面类型、核心内容、视觉方向，并可上传参考图。' },
   { id: 'design', label: '设计', title: '生成 UI 设计图', summary: '生成或确认第一张高保真移动端 UI 设计图。' },
@@ -138,6 +174,11 @@ const runningWorkflowStepId = computed(() => {
   if (runningStep.value === 'html') return 'html'
   if (runningStep.value === 'html-repair') return 'review'
   if (runningStep.value.startsWith('export')) return 'export'
+  if (lastFailure.value?.failedStep === 'html-repair') return 'review'
+  if (['assets', 'missing-assets', 'html-review-assets'].includes(lastFailure.value?.failedStep)) return 'assets'
+  if (lastFailure.value?.failedStep === 'html') return 'html'
+  if (lastFailure.value?.failedStep === 'design') return 'design'
+  if (lastFailure.value?.failedStep === 'export') return 'export'
   return ''
 })
 const currentWorkflowStepId = computed(() => {
@@ -303,8 +344,39 @@ const deliverableSummaryItems = computed(() => [
   },
   {
     label: '导出包',
-    value: exportStatus.value || (hasProjectOutput.value ? '可导出' : '等待产物'),
-    detail: '支持项目 JSON、HTML 素材包、Figma 导入包和实验 .fig。'
+    value: exportStatus.value || exportReadiness.value.summary,
+    detail: '项目 JSON、HTML 素材包、Figma 导入包和实验 .fig 有不同就绪条件。'
+  }
+])
+const exportActionItems = computed(() => [
+  {
+    id: 'project-json',
+    label: '项目 JSON',
+    detail: exportReadiness.value.projectJson.reason,
+    disabled: !exportReadiness.value.projectJson.ready || Boolean(runningStep.value),
+    action: downloadProjectJson
+  },
+  {
+    id: 'html-package',
+    label: 'HTML 素材包',
+    detail: exportReadiness.value.htmlPackage.reason,
+    disabled: !exportReadiness.value.htmlPackage.ready || Boolean(runningStep.value),
+    action: exportCompletePackage
+  },
+  {
+    id: 'figma-package',
+    label: 'Figma 导入包',
+    detail: exportReadiness.value.figmaPackage.reason,
+    disabled: !exportReadiness.value.figmaPackage.ready || Boolean(runningStep.value),
+    action: exportFigmaPackage
+  },
+  {
+    id: 'experimental-fig',
+    label: '实验 .fig',
+    detail: exportReadiness.value.experimentalFig.reason,
+    disabled: !exportReadiness.value.experimentalFig.ready || Boolean(runningStep.value),
+    action: exportExperimentalFig,
+    experimental: true
   }
 ])
 const promptInspectorText = computed(() => [
@@ -1808,7 +1880,8 @@ function buildHtmlDualReviewDisplayText(review) {
 async function runAgentStep({ stage, agentType, message, designBatch = null, assetBatch = null, referenceImages: images = [] }) {
   const settings = ensureBrowserDirectEnabled(loadAgentRuntimeSettings(), [agentType])
   if (!settings.browserDirectEnabled) {
-    throw new Error('当前 Agent 绑定的模型配置不完整。请在右上角“模型设置”确认 Base URL、模型名和 API Key 都已填写；如果使用 .env，改完后需要重启前端 dev server。')
+    const setup = modelSetupHintForStep('', agentType.includes('image2') ? 'design' : 'html')
+    throw new Error(`${setup.title}。${setup.action}`)
   }
 
   return runBrowserAgent({
@@ -2844,8 +2917,31 @@ function openModelSettings() {
   window.dispatchEvent(new CustomEvent('open-model-settings'))
 }
 
-async function persistImageMakeHistory(stage) {
-  if (!hasProjectOutput.value) return
+function modelSetupHintForStep(stepId, failedStep = '') {
+  const step = failedStep || stepId
+  if (['design', 'assets', 'missing-assets', 'html-review-assets'].includes(step)) {
+    return {
+      title: '当前需要配置 GPT Image 2 图像模型',
+      action: '打开“模型设置”，确认“GPT Image 2 图像模型”使用 CN API · GPT Image 2，填写 API Key 后保存，再重试生成。',
+      models: '第一步只需要 GPT Image 2；后续 HTML/复核还会用到 GPT-5.5 和 Gemini。'
+    }
+  }
+  if (['html', 'html-repair', 'review'].includes(step)) {
+    return {
+      title: '当前需要配置 Gemini + GPT-5.5',
+      action: '打开“模型设置”，确认 Gemini 3.1 Pro 视觉理解模型和 GPT-5.5 文本与代码模型都填写了 API Key。',
+      models: 'HTML 与复核会读取设计图、资产和代码，因此需要视觉模型与文本/代码模型。'
+    }
+  }
+  return {
+    title: '建议先配置模型',
+    action: '打开“模型设置”，保存默认三组模型：GPT Image 2、Gemini 3.1 Pro、GPT-5.5。',
+    models: '如果只想先生成第一张 UI 设计图，先填 GPT Image 2 的 API Key。'
+  }
+}
+
+async function persistImageMakeHistory(stage, options = {}) {
+  if (!hasPersistableProject.value && !options.force) return
   if (!activeHistoryId.value) {
     activeHistoryId.value = createHistoryId()
   }
@@ -2904,6 +3000,8 @@ function createImageMakeSnapshot(stage) {
       visualReview: visualReviewText.value,
       htmlDualReview: htmlDualReview.value,
       htmlReviewNotes: htmlReviewNotes.value,
+      failureState: lastFailure.value,
+      exportStatus: exportStatus.value,
       stage,
       savedAt: now
     }
@@ -2953,6 +3051,8 @@ function restoreImageMakeHistory(entry) {
   visualReviewText.value = data.visualReview || ''
   htmlDualReview.value = data.htmlDualReview || null
   htmlReviewNotes.value = data.htmlReviewNotes || ''
+  lastFailure.value = data.failureState || data.lastFailure || null
+  exportStatus.value = data.exportStatus || ''
   htmlScreenshotDataUrl.value = ''
   htmlPipelineStatus.value = htmlSource.value ? '历史已恢复' : ''
   htmlRun.value = htmlSource.value
@@ -2991,6 +3091,8 @@ function startNewImageMakeTask() {
   designDetailReview.value = null
   assetCount.value = 0
   htmlReviewNotes.value = ''
+  lastFailure.value = null
+  exportStatus.value = ''
   error.value = ''
   messages.value = [
     {
@@ -3065,27 +3167,31 @@ function formatHistoryTime(value) {
 }
 
 function historyStageLabel(entry) {
-  if (entry?.htmlReady) return 'HTML'
-  if (entry?.assetCount) return `${entry.assetCount} 张切图`
-  if (entry?.designUrl) return 'UI 设计图'
-  return '草稿'
+  const project = normalizeImageMakeProject(entry)
+  return project.failureState ? '需恢复' : project.currentStage
 }
 
 function historyContinueLabel(entry) {
-  if (entry?.htmlReady) return '继续修改 HTML'
-  if (entry?.assetCount) return '继续生成 HTML'
-  if (entry?.designUrl) return '继续生成切图'
-  return '继续生成 UI'
+  return normalizeImageMakeProject(entry).continueLabel
 }
 
 async function runStep(step, task) {
   runningStep.value = step
   error.value = ''
+  lastFailure.value = null
   try {
     await task()
   } catch (err) {
+    lastFailure.value = {
+      failedStep: step,
+      label: getFailureStepLabel(step),
+      message: err.message,
+      failedAt: new Date().toISOString(),
+      retryAction: getFailureRetryLabel(step)
+    }
     error.value = err.message
     appendMessage('assistant', `执行失败：${err.message}`)
+    await persistImageMakeHistory(step, { force: true })
   } finally {
     runningStep.value = ''
   }
@@ -3145,7 +3251,10 @@ function downloadText(fileName, content, type = 'text/plain;charset=utf-8') {
 }
 
 function downloadProjectJson() {
+  if (exportActionItems.value[0]?.disabled) return
   downloadText('image-make-project.json', JSON.stringify(buildProjectJson(createExportSnapshot()), null, 2), 'application/json;charset=utf-8')
+  exportStatus.value = '项目 JSON 已生成'
+  persistImageMakeHistory('export', { force: true })
 }
 
 function downloadHtml() {
@@ -3154,7 +3263,7 @@ function downloadHtml() {
 }
 
 async function exportCompletePackage() {
-  if (!hasProjectOutput.value || runningStep.value) return
+  if (!exportReadiness.value.htmlPackage.ready || runningStep.value) return
   await runExportTask('正在打包 HTML 与素材', async () => {
     await ensureExportScreenshot()
     await downloadCompleteProjectPackage(createExportSnapshot())
@@ -3163,7 +3272,7 @@ async function exportCompletePackage() {
 }
 
 async function exportFigmaPackage() {
-  if (!hasProjectOutput.value || runningStep.value) return
+  if (!exportReadiness.value.figmaPackage.ready || runningStep.value) return
   await runExportTask('正在生成 Figma 导入包', async () => {
     await ensureExportScreenshot()
     await downloadFigmaImportPackage(createExportSnapshot())
@@ -3172,7 +3281,7 @@ async function exportFigmaPackage() {
 }
 
 async function exportExperimentalFig() {
-  if (!hasProjectOutput.value || runningStep.value) return
+  if (!exportReadiness.value.experimentalFig.ready || runningStep.value) return
   await runExportTask('正在生成实验 .fig 文件', async () => {
     await ensureExportScreenshot()
     downloadExperimentalFigFile(createExportSnapshot())
@@ -3183,12 +3292,22 @@ async function exportExperimentalFig() {
 async function runExportTask(status, task) {
   exportStatus.value = status
   error.value = ''
+  lastFailure.value = null
   try {
     await task()
+    await persistImageMakeHistory('export', { force: true })
   } catch (err) {
+    lastFailure.value = {
+      failedStep: 'export',
+      label: getFailureStepLabel('export'),
+      message: err.message,
+      failedAt: new Date().toISOString(),
+      retryAction: getFailureRetryLabel('export')
+    }
     exportStatus.value = '导出失败'
     error.value = `导出失败：${err.message}`
     appendMessage('assistant', `导出失败：${err.message}`)
+    await persistImageMakeHistory('export', { force: true })
   }
 }
 
@@ -3267,6 +3386,14 @@ onMounted(() => {
           </span>
           <button type="button" @click="openModelSettings">模型设置</button>
         </div>
+        <section v-if="!modelReady || lastFailure" class="model-next-step-card">
+          <strong>{{ currentModelSetupHint.title }}</strong>
+          <p>{{ currentModelSetupHint.action }}</p>
+          <small>{{ currentModelSetupHint.models }}</small>
+          <button class="button button-secondary" type="button" @click="openModelSettings">
+            打开模型设置
+          </button>
+        </section>
       </div>
       <div class="current-step-action">
         <span>当前步骤：{{ currentWorkflowStep.label }}</span>
@@ -3279,7 +3406,7 @@ onMounted(() => {
           <FileDown v-else :size="17" />
           {{ primaryWorkflowAction.label }}
         </button>
-        <small>{{ primaryWorkflowAction.hint }}</small>
+        <small>{{ currentContinueHint }}</small>
       </div>
     </section>
 
@@ -3302,8 +3429,14 @@ onMounted(() => {
       </ol>
     </section>
 
-    <section v-if="error" class="notice notice-error">
-      {{ error }}
+    <section v-if="error" class="notice notice-error recovery-notice">
+      <div>
+        <strong>{{ lastFailure?.label || '执行失败' }}</strong>
+        <span>{{ error }}</span>
+      </div>
+      <button class="button button-secondary" type="button" @click="openModelSettings">
+        打开模型设置
+      </button>
     </section>
 
     <section class="image-make-grid">
@@ -3448,7 +3581,7 @@ onMounted(() => {
             <p>这些入口用于重跑或补齐细节。当前步骤的主操作已经提升到页面顶部。</p>
           </section>
 
-          <section class="image-history-panel" aria-label="单图生成历史">
+          <section class="image-history-panel" aria-label="生成工作台历史">
             <div class="image-history-head">
               <div>
                 <span>任务历史</span>
@@ -3485,6 +3618,17 @@ onMounted(() => {
           <span>{{ currentWorkflowStep.title }}</span>
         </div>
 
+        <section class="continue-path-card" :class="{ 'is-failed': lastFailure }">
+          <div>
+            <span>{{ lastFailure ? '恢复路径' : '继续路径' }}</span>
+            <strong>{{ currentProjectModel.nextAction.label }}</strong>
+            <p>{{ currentContinueHint }}</p>
+          </div>
+          <button class="button button-secondary" type="button" :disabled="primaryWorkflowAction.disabled" @click="runPrimaryWorkflowAction">
+            {{ lastFailure?.retryAction || currentProjectModel.nextAction.label }}
+          </button>
+        </section>
+
         <article class="pipeline-card">
           <header>
             <div>
@@ -3517,7 +3661,7 @@ onMounted(() => {
             />
             <div v-else>
               <Image :size="32" />
-              <p>生成后的 UI 设计图会显示在这里。</p>
+              <p>生成后的 UI 设计图会显示在这里，后续资产和 HTML 都会以它为基准。</p>
             </div>
           </div>
 
@@ -3578,7 +3722,7 @@ onMounted(() => {
             </article>
             <div v-if="!assets.length" class="empty-output">
               <Sparkles :size="28" />
-              <p>基于设计图生成的切图会显示在这里。</p>
+              <p>生成 UI 设计图后，页面需要的商品图、插画、图标和复杂视觉会显示在这里。</p>
             </div>
           </div>
         </article>
@@ -3619,7 +3763,7 @@ onMounted(() => {
             />
             <div v-else class="empty-output">
               <Code2 :size="28" />
-              <p>生成后的 HTML 会在这里实时预览。</p>
+              <p>设计图和资产准备好后，生成的 HTML 原型会在这里实时预览。</p>
             </div>
           </div>
         </article>
@@ -3648,23 +3792,19 @@ onMounted(() => {
             <strong>{{ exportStatus || '准备就绪' }}</strong>
           </div>
           <div class="image-make-export-actions">
-            <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="downloadProjectJson">
-              <FileDown :size="16" />
-              项目 JSON
-            </button>
-            <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="exportCompletePackage">
-              <FileDown :size="16" />
-              HTML 素材包
-            </button>
-            <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="exportFigmaPackage">
-              <FileDown :size="16" />
-              Figma 导入包
-            </button>
-            <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" title="实验导出：Figma 原生 .fig 是非公开格式，此文件用于 OpenPencil/Agent 交接。" @click="exportExperimentalFig">
-              <FileDown :size="16" />
-              实验 .fig
-            </button>
-            <small>{{ exportStatus || '产物生成后可导出项目包。' }}</small>
+            <article
+              v-for="item in exportActionItems"
+              :key="item.id"
+              class="export-action-card"
+              :class="{ 'is-experimental': item.experimental }"
+            >
+              <button class="button button-secondary" type="button" :disabled="item.disabled" @click="item.action">
+                <FileDown :size="16" />
+                {{ item.label }}
+              </button>
+              <small>{{ item.detail }}</small>
+            </article>
+            <small class="export-status-copy">{{ exportStatus || exportReadiness.summary }}</small>
           </div>
         </section>
 

@@ -362,6 +362,34 @@ Not allowed in this phase unless explicitly approved:
 
 ## Priority Roadmap
 
+## Current Handoff
+
+Current status:
+
+- P0 is complete and locally visually accepted.
+- P1 is complete as frontend-first project confidence work.
+- Do not reopen P0 or redo the IA audit.
+- Do not add lightweight frontend-only project CRUD before P2.
+- Next work should start with P2 backend project modeling and durable project management.
+
+Recommended next-chat prompt:
+
+```text
+请阅读 /Users/wangruiqi/Projects/ai-design-to-web/docs/ui-redesign-plan.md，从 P2 开始。
+
+当前 P0 和 P1 已完成，不要回退 P0，不要重做 IA Audit，也不要先做前端-only 的假 CRUD。
+
+请先制定 P2 后端 Project/Run/Artifact 设计与实施计划，不要直接改代码。重点评估：
+1. 现有 image_make_runs 如何迁移或适配为 Project 下的 Run
+2. Project / Run / Artifact schema
+3. REST API 设计：projects CRUD、runs、artifacts
+4. dashboard 项目管理 UX：rename / duplicate / delete or archive / search / filters / detail drawer
+5. 与现有 /image-make history restore、export package、localStorage 的兼容策略
+6. 测试计划和迁移风险
+
+输出：P2 roadmap、schema/API 草案、迁移策略、验收标准、建议先做哪一项。
+```
+
 ### P0: Product IA Reset
 
 - [x] Create a working redesign plan.
@@ -387,22 +415,31 @@ Acceptance criteria:
 
 ### P1: Project Dashboard And First-Run Confidence
 
-- [ ] Add or simulate project cards on `/dashboard`.
-- [ ] Show recent projects with current step and latest artifact status.
-- [ ] Add model readiness status to the start page and studio.
-- [ ] Replace default demo prompt with examples or prompt chips.
-- [ ] Improve empty states so they explain the next action and expected output.
-- [ ] Make export readiness clear before and after generation.
-- [ ] Add first-run path in README with recommended route and expected output.
+- [x] Add or simulate project cards on `/dashboard`.
+- [x] Show recent projects with current step and latest artifact status.
+- [x] Add model readiness status to the start page and studio.
+- [x] Replace default demo prompt with examples or prompt chips.
+- [x] Improve empty states so they explain the next action and expected output.
+- [x] Make export readiness clear before and after generation.
+- [x] Add first-run path in README with recommended route and expected output.
+- [x] Normalize existing image-make history into a frontend `Project`/`Run` view.
+- [x] Persist and surface failure recovery state for current history-backed projects.
+- [x] Clarify model setup guidance for first-run UI design generation.
+- [x] Defer true project CRUD until backend `Project`/`Run`/`Artifact` modeling in P2.
 
 Acceptance criteria:
 
 - Returning users can resume work without reading Stage history.
 - First-time users can start without understanding Agent names.
 - Users understand why export buttons are disabled before output exists.
+- Users understand that dashboard project cards are history-backed until P2 backend project CRUD lands.
 
-### P2: Advanced Mode And Multi-Page Expansion
+### P2: Backend Project Model, CRUD, And Multi-Page Expansion
 
+- [ ] Add true backend `Project`, `Run`, and `Artifact` schema.
+- [ ] Add project CRUD APIs for list, create, update, delete, run creation, and artifact lookup.
+- [ ] Migrate or adapt existing `image_make_runs` history into project-owned runs without breaking old history.
+- [ ] Add dashboard project management UX for rename, duplicate, delete/archive, search, filters, and project detail drawer.
 - [ ] Rename and visually frame `/make` as Agent Lab.
 - [ ] Keep route templates, stage selection, Agent selection, batch controls, canvas, handoff prompt, and run history.
 - [ ] Make Agent Lab explicitly useful for debugging, batch generation, and route experiments.
@@ -412,6 +449,7 @@ Acceptance criteria:
 
 Acceptance criteria:
 
+- Projects can be managed as durable backend objects rather than only history-backed cards.
 - `/make` no longer competes with the main studio as a default path.
 - Advanced users can still inspect and control Agent internals.
 - Multi-page work has a clear project-level home.
@@ -533,6 +571,13 @@ Acceptance criteria:
 ## Change Log
 
 ### 2026-06-08
+
+- Closed P1 as frontend-first project confidence work:
+  - normalized existing image-make history into a frontend `Project`/`Run` view without backend schema changes
+  - added failure recovery state, export readiness explanations, clearer continuation paths, and README first-run guidance
+  - clarified model setup UX so first-time users know the first generation step requires `GPT Image 2 图像模型`
+  - confirmed the current backend only has `image_make_runs` history persistence and no durable `Project` CRUD model
+  - decided not to add lightweight project CRUD in P1/P1.5; project management will be handled in P2 together with backend `Project`/`Run`/`Artifact` schema and migration/adaptation from `image_make_runs`
 
 - Reframed the plan from UI redesign to product IA redesign after auditing the public GitHub repo and README.
   - recorded the mismatch between the README's end-to-end design production promise and the current route labels on `main`
