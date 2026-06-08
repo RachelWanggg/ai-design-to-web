@@ -2613,12 +2613,13 @@ li {
 
 .image-make-grid {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr) minmax(320px, 420px);
   gap: 18px;
   align-items: start;
 }
 
 .image-chat-panel,
+.image-inspector-panel,
 .pipeline-card {
   min-width: 0;
   padding: 16px;
@@ -2638,6 +2639,152 @@ li {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+.image-inspector-panel {
+  position: sticky;
+  top: 92px;
+  display: grid;
+  gap: 14px;
+  max-height: calc(100vh - 112px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.image-inspector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.image-inspector-head h2 {
+  margin: 0;
+}
+
+.image-inspector-head > span {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--primary);
+  background: #eef4ff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.inspector-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.inspector-tabs button {
+  min-height: 32px;
+  min-width: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.inspector-tabs button.is-active {
+  color: var(--primary);
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(20, 31, 54, 0.08);
+}
+
+.inspector-section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.inspector-row,
+.inspector-report,
+.inspector-model-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.inspector-row.is-error {
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+
+.inspector-row span,
+.inspector-model-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.inspector-row strong,
+.inspector-report strong,
+.inspector-model-card strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-row p,
+.inspector-report p,
+.inspector-model-card p,
+.inspector-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.inspector-report pre {
+  max-height: 360px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: #1f2937;
+  background: #fff;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.inspector-report img {
+  width: min(100%, 220px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.inspector-model-card small {
+  overflow: hidden;
+  color: #66758f;
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-log-feed {
+  max-height: 280px;
 }
 
 .image-chat-feed {
@@ -3390,6 +3537,33 @@ li {
   min-height: 640px;
 }
 
+.html-summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #c7d7fe;
+  border-radius: 8px;
+  background: #f5f8ff;
+}
+
+.html-summary-strip span {
+  flex: 1 1 150px;
+  min-width: 0;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.4;
+}
+
+.html-summary-strip .button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding-inline: 10px;
+  font-size: 12px;
+}
+
 .html-review-stack {
   display: grid;
   gap: 10px;
@@ -3796,6 +3970,12 @@ li {
     grid-template-columns: 340px minmax(0, 1fr);
   }
 
+  .image-inspector-panel {
+    grid-column: 1 / -1;
+    position: static;
+    max-height: none;
+  }
+
   .workflow-stepper ol {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -3891,7 +4071,8 @@ li {
     text-align: left;
   }
 
-  .image-chat-panel {
+  .image-chat-panel,
+  .image-inspector-panel {
     position: static;
     max-height: none;
   }

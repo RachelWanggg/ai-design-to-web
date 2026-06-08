@@ -47,6 +47,7 @@ const historyEntries = ref([])
 const activeHistoryId = ref('')
 const historySyncStatus = ref('')
 const exportStatus = ref('')
+const activeInspectorTab = ref('status')
 
 const design = computed(() => {
   const designs = designRun.value?.designBatchArtifact?.designs || []
@@ -209,6 +210,85 @@ const primaryWorkflowAction = computed(() => {
   }
 })
 
+const inspectorTabs = [
+  { id: 'status', label: '状态' },
+  { id: 'artifacts', label: '产物' },
+  { id: 'logs', label: '日志' },
+  { id: 'prompt', label: '提示词' },
+  { id: 'models', label: '模型细节' }
+]
+const inspectorStatusItems = computed(() => [
+  {
+    label: '当前步骤',
+    value: currentWorkflowStep.value.title,
+    detail: runningStep.value ? `正在执行：${runningStep.value}` : currentWorkflowStep.value.summary
+  },
+  {
+    label: 'UI 设计图',
+    value: designStatusLabel.value,
+    detail: design.value?.fileName || '尚未生成'
+  },
+  {
+    label: '切图资产',
+    value: `${successfulAssets.value.length}/${assets.value.length || assetPlan.value?.count || 0}`,
+    detail: assetPlan.value?.reason || '等待 Gemini 自动判断切图数量'
+  },
+  {
+    label: 'HTML',
+    value: htmlSource.value ? '可预览' : '等待生成',
+    detail: htmlPipelineStatus.value || '生成后会进入代码审核和视觉复核'
+  },
+  {
+    label: '历史',
+    value: currentHistoryTitle.value,
+    detail: historySyncStatus.value || '本地 + SQLite'
+  }
+])
+const artifactSummaryItems = computed(() => [
+  {
+    label: '设计图',
+    value: design.value?.fileName || '未生成',
+    detail: design.value?.resultUrl || design.value?.localUrl || ''
+  },
+  {
+    label: 'asset-map',
+    value: assets.value.length ? `${assets.value.length} 张资产` : '未生成',
+    detail: successfulAssets.value.length ? `${successfulAssets.value.length} 张可用` : assetPlan.value?.reason || ''
+  },
+  {
+    label: '缺失切图扫描',
+    value: missingAssetScan.value ? `${missingAssetScan.value.assets?.length || 0} 张候选` : '未运行',
+    detail: missingAssetScan.value?.coverageSummary || missingAssetScan.value?.reason || ''
+  },
+  {
+    label: '设计规格',
+    value: designSpec.value ? '已提取' : '未提取',
+    detail: designSpec.value?.visualSummary || designSpec.value?.raw || ''
+  },
+  {
+    label: 'HTML',
+    value: htmlSource.value ? `${htmlSource.value.length} 字符` : '未生成',
+    detail: htmlRun.value?.id || ''
+  },
+  {
+    label: '最终截图',
+    value: htmlScreenshotDataUrl.value ? '已生成' : '未生成',
+    detail: htmlScreenshotDataUrl.value ? '用于视觉复核和导出' : ''
+  }
+])
+const promptInspectorText = computed(() => [
+  '页面描述：',
+  prompt.value.trim() || '暂无',
+  '',
+  referenceImages.value.length
+    ? `参考图：${referenceImageNames.value}\n参考图参与生成：${useReferenceImages.value ? '是' : '否'}`
+    : '参考图：暂无',
+  '',
+  htmlReviewNotes.value.trim()
+    ? `复核修复注意项：\n${htmlReviewNotes.value.trim()}`
+    : '复核修复注意项：暂无'
+].join('\n'))
+
 const workflowStages = {
   design: {
     id: 'image-make-design',
@@ -256,6 +336,38 @@ const workflowStages = {
     gate: ['Gemini 与 GPT-5.5 都完成复核', '缺失切图用 image2 追加生成', '修复后再次截图复核']
   }
 }
+const modelDetailCards = computed(() => [
+  {
+    label: 'UI 设计图',
+    agent: 'image2-ui-agent',
+    stage: workflowStages.design,
+    runId: designRun.value?.id || ''
+  },
+  {
+    label: '切图资产',
+    agent: 'image2-assets-agent',
+    stage: workflowStages.assets,
+    runId: assetRun.value?.id || ''
+  },
+  {
+    label: 'HTML 生成',
+    agent: 'gemini-html-agent',
+    stage: workflowStages.html,
+    runId: htmlRun.value?.id || ''
+  },
+  {
+    label: '代码审核 / 修复',
+    agent: 'code-review-agent',
+    stage: workflowStages.htmlRepair,
+    runId: codeReviewRun.value?.id || ''
+  },
+  {
+    label: '视觉复核',
+    agent: 'qa-agent / gpt-html-visual-review-agent',
+    stage: workflowStages.htmlRepair,
+    runId: visualReviewRun.value?.id || ''
+  }
+])
 
 async function generateDesign() {
   if (!prompt.value.trim()) return
@@ -3109,17 +3221,10 @@ onMounted(() => {
       <aside class="image-chat-panel">
         <div class="make-panel-head">
           <div>
-            <p class="eyebrow">Prompt</p>
-            <h2>对话</h2>
+            <p class="eyebrow">Requirement</p>
+            <h2>需求与控制</h2>
           </div>
           <LoaderCircle v-if="runningStep" class="spin" :size="18" />
-        </div>
-
-        <div class="image-chat-feed">
-          <article v-for="message in messages" :key="message.id" :class="`is-${message.role}`">
-            <span>{{ message.role === 'user' ? 'You' : 'Agent' }}</span>
-            <p>{{ message.content }}</p>
-          </article>
         </div>
 
         <form class="image-composer" @submit.prevent>
@@ -3404,98 +3509,13 @@ onMounted(() => {
             <span>{{ htmlPipelineStatus || (htmlSource ? '可预览' : '等待生成') }}</span>
           </div>
 
-          <div v-if="designDetailReview || designSpec || codeReviewText || visualReviewText || htmlDualReview || htmlScreenshotDataUrl" class="html-review-stack">
-            <article v-if="designDetailReview">
-              <strong>Gemini 设计图复核</strong>
-              <p>{{ designDetailReview.visualSummary || designDetailReview.viewportEvidence || '已复核设计图比例、区块顺序、视觉资产边界和 HTML 还原锚点。' }}</p>
-            </article>
-            <article v-if="designSpec">
-              <strong>Gemini 设计规格</strong>
-              <p>{{ designSpec.visualSummary || designSpec.raw || '已提取布局、颜色、字号、间距和组件规格。' }}</p>
-            </article>
-            <article v-if="codeReviewText">
-              <strong>GPT-5.5 代码审核</strong>
-              <p>{{ codeReviewText.slice(0, 220) }}</p>
-            </article>
-            <article v-if="visualReviewText">
-              <strong>Gemini 最终截图审核</strong>
-              <p>{{ visualReviewText.slice(0, 320) }}</p>
-            </article>
-            <article v-if="htmlDualReview">
-              <strong>Gemini + GPT-5.5 双模型复核</strong>
-              <p>
-                {{
-                  buildHtmlDualReviewDisplayText(htmlDualReview.finalPass || htmlDualReview.firstPass).slice(0, 360)
-                }}
-              </p>
-            </article>
-            <article v-if="htmlReviewSectionScans.length" class="html-section-scan-card">
-              <div class="html-review-card-head">
-                <strong>逐段扫描与重对齐</strong>
-                <span>{{ htmlReviewSectionScans.length }} 段</span>
-              </div>
-              <div class="html-section-scan-list">
-                <section v-for="section in htmlReviewSectionScans.slice(0, 10)" :key="section.id || section.section">
-                  <header>
-                    <strong>{{ section.section }}</strong>
-                    <span>{{ section.alignmentScore ? `${section.alignmentScore} 分` : '待评分' }}</span>
-                  </header>
-                  <p v-if="section.designEvidence || section.htmlEvidence">
-                    {{ section.designEvidence || '设计图证据待补充' }} / {{ section.htmlEvidence || 'HTML 截图证据待补充' }}
-                  </p>
-                  <p v-if="section.assetAlignment">切图对齐：{{ section.assetAlignment }}</p>
-                  <ul v-if="section.issues?.length">
-                    <li v-for="issue in section.issues.slice(0, 3)" :key="`${section.section}-${issue.issue}`">
-                      {{ issue.severity }} · {{ issue.issue }}{{ issue.fixHint ? `；${issue.fixHint}` : '' }}
-                    </li>
-                  </ul>
-                  <div v-if="section.missingAssets?.length" class="html-section-missing-assets">
-                    <button
-                      v-for="asset in section.missingAssets.slice(0, 4)"
-                      :key="`${section.section}-${asset.fileName}`"
-                      type="button"
-                      :disabled="runningStep || isHtmlReviewMissingAssetGenerated(asset)"
-                      @click="generateHtmlReviewMissingAssets(asset)"
-                    >
-                      {{ isHtmlReviewMissingAssetGenerated(asset) ? '已补齐' : '补齐' }} {{ asset.fileName }}
-                    </button>
-                  </div>
-                </section>
-              </div>
-            </article>
-            <article v-if="activeHtmlReview?.missingAssetPlan?.assets?.length" class="html-missing-assets-card">
-              <div class="html-review-card-head">
-                <strong>缺失切图候选</strong>
-                <span>待补齐 {{ htmlReviewPendingMissingAssets.length }}/{{ activeHtmlReview.missingAssetPlan.assets.length }}</span>
-              </div>
-              <p>{{ activeHtmlReview.missingAssetPlan.coverageSummary || activeHtmlReview.missingAssetPlan.reason || '逐段扫描发现这些切图会影响 HTML 还原质量。' }}</p>
-              <div class="html-missing-asset-list">
-                <button
-                  v-for="asset in activeHtmlReview.missingAssetPlan.assets.slice(0, 12)"
-                  :key="asset.fileName"
-                  type="button"
-                  :class="{ 'is-generated': isHtmlReviewMissingAssetGenerated(asset) }"
-                  :disabled="runningStep || isHtmlReviewMissingAssetGenerated(asset)"
-                  @click="generateHtmlReviewMissingAssets(asset)"
-                >
-                  <strong>{{ asset.fileName }}</strong>
-                  <span>{{ isHtmlReviewMissingAssetGenerated(asset) ? '已在 asset-map' : asset.purpose }}</span>
-                </button>
-              </div>
-              <button
-                class="html-review-generate-button"
-                type="button"
-                :disabled="!canGenerateHtmlReviewMissingAssets"
-                @click="generateHtmlReviewMissingAssets()"
-              >
-                <Sparkles :size="14" />
-                {{ runningStep === 'html-review-assets' ? '补齐切图中' : '补齐全部缺失切图' }}
-              </button>
-            </article>
-            <article v-if="htmlScreenshotDataUrl">
-              <strong>最终效果截图</strong>
-              <img :src="htmlScreenshotDataUrl" alt="最终 HTML 效果截图" />
-            </article>
+          <div v-if="designDetailReview || designSpec || codeReviewText || visualReviewText || htmlDualReview || htmlScreenshotDataUrl" class="html-summary-strip">
+            <span>{{ designSpec ? '设计规格已提取' : designDetailReview ? '设计细节已复核' : '等待设计规格' }}</span>
+            <span>{{ codeReviewText ? '代码审核已完成' : htmlSource ? '等待代码审核' : '等待 HTML' }}</span>
+            <span>{{ activeHtmlReview ? `复核评分 ${activeHtmlReview.score || '待定'}` : visualReviewText ? '视觉报告已生成' : '等待视觉复核' }}</span>
+            <button class="button button-secondary" type="button" @click="activeInspectorTab = 'artifacts'">
+              查看技术细节
+            </button>
           </div>
 
           <div class="html-live-preview">
@@ -3513,6 +3533,185 @@ onMounted(() => {
           </div>
         </article>
       </section>
+
+      <aside class="image-inspector-panel" aria-label="高级细节检查器">
+        <div class="image-inspector-head">
+          <div>
+            <p class="eyebrow">Inspector</p>
+            <h2>高级细节</h2>
+          </div>
+          <span>{{ runningStep ? '执行中' : '可检查' }}</span>
+        </div>
+
+        <div class="inspector-tabs" role="tablist" aria-label="高级细节分类">
+          <button
+            v-for="tab in inspectorTabs"
+            :key="tab.id"
+            type="button"
+            role="tab"
+            :aria-selected="activeInspectorTab === tab.id"
+            :class="{ 'is-active': activeInspectorTab === tab.id }"
+            @click="activeInspectorTab = tab.id"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+
+        <section v-if="activeInspectorTab === 'status'" class="inspector-section">
+          <article v-for="item in inspectorStatusItems" :key="item.label" class="inspector-row">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+            <p>{{ item.detail }}</p>
+          </article>
+          <article v-if="error" class="inspector-row is-error">
+            <span>错误</span>
+            <strong>执行失败</strong>
+            <p>{{ error }}</p>
+          </article>
+          <article v-if="exportStatus" class="inspector-row">
+            <span>导出</span>
+            <strong>{{ exportStatus }}</strong>
+            <p>导出动作仍在左侧“导出与交接”区域。</p>
+          </article>
+        </section>
+
+        <section v-else-if="activeInspectorTab === 'artifacts'" class="inspector-section">
+          <article v-for="item in artifactSummaryItems" :key="item.label" class="inspector-row">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+            <p v-if="item.detail">{{ item.detail }}</p>
+          </article>
+
+          <article v-if="designDetailReview" class="inspector-report">
+            <strong>Gemini 设计图复核</strong>
+            <p>{{ designDetailReview.visualSummary || designDetailReview.viewportEvidence || '已复核设计图比例、区块顺序、视觉资产边界和 HTML 还原锚点。' }}</p>
+          </article>
+
+          <article v-if="htmlDualReview" class="inspector-report">
+            <strong>Gemini + GPT-5.5 双模型复核</strong>
+            <p>{{ buildHtmlDualReviewDisplayText(htmlDualReview.finalPass || htmlDualReview.firstPass) }}</p>
+          </article>
+
+          <article v-if="htmlReviewSectionScans.length" class="html-section-scan-card">
+            <div class="html-review-card-head">
+              <strong>逐段扫描与重对齐</strong>
+              <span>{{ htmlReviewSectionScans.length }} 段</span>
+            </div>
+            <div class="html-section-scan-list">
+              <section v-for="section in htmlReviewSectionScans.slice(0, 10)" :key="section.id || section.section">
+                <header>
+                  <strong>{{ section.section }}</strong>
+                  <span>{{ section.alignmentScore ? `${section.alignmentScore} 分` : '待评分' }}</span>
+                </header>
+                <p v-if="section.designEvidence || section.htmlEvidence">
+                  {{ section.designEvidence || '设计图证据待补充' }} / {{ section.htmlEvidence || 'HTML 截图证据待补充' }}
+                </p>
+                <p v-if="section.assetAlignment">切图对齐：{{ section.assetAlignment }}</p>
+                <ul v-if="section.issues?.length">
+                  <li v-for="issue in section.issues.slice(0, 3)" :key="`${section.section}-${issue.issue}`">
+                    {{ issue.severity }} · {{ issue.issue }}{{ issue.fixHint ? `；${issue.fixHint}` : '' }}
+                  </li>
+                </ul>
+                <div v-if="section.missingAssets?.length" class="html-section-missing-assets">
+                  <button
+                    v-for="asset in section.missingAssets.slice(0, 4)"
+                    :key="`${section.section}-${asset.fileName}`"
+                    type="button"
+                    :disabled="runningStep || isHtmlReviewMissingAssetGenerated(asset)"
+                    @click="generateHtmlReviewMissingAssets(asset)"
+                  >
+                    {{ isHtmlReviewMissingAssetGenerated(asset) ? '已补齐' : '补齐' }} {{ asset.fileName }}
+                  </button>
+                </div>
+              </section>
+            </div>
+          </article>
+
+          <article v-if="activeHtmlReview?.missingAssetPlan?.assets?.length" class="html-missing-assets-card">
+            <div class="html-review-card-head">
+              <strong>缺失切图候选</strong>
+              <span>待补齐 {{ htmlReviewPendingMissingAssets.length }}/{{ activeHtmlReview.missingAssetPlan.assets.length }}</span>
+            </div>
+            <p>{{ activeHtmlReview.missingAssetPlan.coverageSummary || activeHtmlReview.missingAssetPlan.reason || '逐段扫描发现这些切图会影响 HTML 还原质量。' }}</p>
+            <div class="html-missing-asset-list">
+              <button
+                v-for="asset in activeHtmlReview.missingAssetPlan.assets.slice(0, 12)"
+                :key="asset.fileName"
+                type="button"
+                :class="{ 'is-generated': isHtmlReviewMissingAssetGenerated(asset) }"
+                :disabled="runningStep || isHtmlReviewMissingAssetGenerated(asset)"
+                @click="generateHtmlReviewMissingAssets(asset)"
+              >
+                <strong>{{ asset.fileName }}</strong>
+                <span>{{ isHtmlReviewMissingAssetGenerated(asset) ? '已在 asset-map' : asset.purpose }}</span>
+              </button>
+            </div>
+            <button
+              class="html-review-generate-button"
+              type="button"
+              :disabled="!canGenerateHtmlReviewMissingAssets"
+              @click="generateHtmlReviewMissingAssets()"
+            >
+              <Sparkles :size="14" />
+              {{ runningStep === 'html-review-assets' ? '补齐切图中' : '补齐全部缺失切图' }}
+            </button>
+          </article>
+
+          <article v-if="htmlScreenshotDataUrl" class="inspector-report">
+            <strong>最终效果截图</strong>
+            <img :src="htmlScreenshotDataUrl" alt="最终 HTML 效果截图" />
+          </article>
+        </section>
+
+        <section v-else-if="activeInspectorTab === 'logs'" class="inspector-section">
+          <div class="image-chat-feed inspector-log-feed">
+            <article v-for="message in messages" :key="message.id" :class="`is-${message.role}`">
+              <span>{{ message.role === 'user' ? 'You' : 'Agent' }}</span>
+              <p>{{ message.content }}</p>
+            </article>
+          </div>
+          <article v-if="codeReviewText" class="inspector-report">
+            <strong>GPT-5.5 代码审核</strong>
+            <pre>{{ codeReviewText }}</pre>
+          </article>
+          <article v-if="visualReviewText" class="inspector-report">
+            <strong>视觉复核报告</strong>
+            <pre>{{ visualReviewText }}</pre>
+          </article>
+          <article v-if="!messages.length && !codeReviewText && !visualReviewText" class="empty-output">
+            <p>运行日志和报告会显示在这里。</p>
+          </article>
+        </section>
+
+        <section v-else-if="activeInspectorTab === 'prompt'" class="inspector-section">
+          <article class="inspector-report">
+            <strong>当前提示词</strong>
+            <pre>{{ promptInspectorText }}</pre>
+          </article>
+          <article v-if="assetPlan" class="inspector-report">
+            <strong>Gemini 切图规划</strong>
+            <pre>{{ JSON.stringify(assetPlan, null, 2) }}</pre>
+          </article>
+          <article v-if="missingAssetScan" class="inspector-report">
+            <strong>缺失切图规划</strong>
+            <pre>{{ JSON.stringify(missingAssetScan, null, 2) }}</pre>
+          </article>
+          <article v-if="designSpec" class="inspector-report">
+            <strong>设计规格 JSON</strong>
+            <pre>{{ JSON.stringify(designSpec, null, 2) }}</pre>
+          </article>
+        </section>
+
+        <section v-else class="inspector-section">
+          <p class="inspector-note">模型配置仍由右上角“模型设置”统一管理；这里仅展示当前工作流会用到的 Agent、阶段和运行标识。</p>
+          <article v-for="item in modelDetailCards" :key="item.label" class="inspector-model-card">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.agent }}</strong>
+            <p>{{ item.stage.title }}：{{ item.stage.summary }}</p>
+            <small>{{ item.runId ? `Run ID：${item.runId}` : '尚未运行' }}</small>
+          </article>
+        </section>
+      </aside>
     </section>
   </main>
 </template>
