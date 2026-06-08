@@ -18,7 +18,7 @@ defineEmits(['refresh'])
         <Workflow :size="22" />
       </div>
       <div>
-        <p class="eyebrow">AI UI Workflow Console</p>
+        <p class="eyebrow">AI Prototype Studio</p>
         <h1>AI Design to Web</h1>
       </div>
     </div>
@@ -35,11 +35,11 @@ defineEmits(['refresh'])
         </a>
         <a class="nav-link" :class="{ 'is-active': activePage === 'dashboard' }" href="/dashboard">
           <LayoutDashboard :size="16" />
-          控制台
+          项目
         </a>
-        <a class="nav-link" :class="{ 'is-active': activePage === 'make' }" href="/make">
+        <a class="nav-link nav-link-muted" :class="{ 'is-active': activePage === 'make' }" href="/make">
           <WandSparkles :size="16" />
-          高级模式
+          高级工具
         </a>
       </nav>
       <a class="icon-link" href="https://github.com" target="_blank" rel="noreferrer" title="GitHub">

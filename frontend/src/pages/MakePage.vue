@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { Boxes, Route, Workflow } from 'lucide-vue-next'
 import { getDocument, getWorkflow, runAgent } from '../services/api'
 import { loadAgentRuntimeSettings, runBrowserAgent } from '../services/agentRuntime'
 import MakeChat from '../components/make/MakeChat.vue'
@@ -311,31 +312,46 @@ onMounted(async () => {
       <p>正在载入 Make 工作台...</p>
     </section>
 
-    <section v-else class="make-grid" :class="{ 'is-process-collapsed': processCollapsed }">
-      <MakeChat
-        v-model:selected-stage-id="selectedStageId"
-        :stages="stages"
-        :messages="messages"
-        :loading="running"
-        @submit="submitChat"
-      />
+    <template v-else>
+      <section class="advanced-tool-hero">
+        <div>
+          <p class="eyebrow">Advanced Tool</p>
+          <h2>高级工具</h2>
+          <p>用于 Agent 编排、阶段调试、批量设计/切图路线设置。新手默认生成路径请使用“生成工作台”。</p>
+        </div>
+        <div class="advanced-tool-tags" aria-label="高级工具能力">
+          <span><Workflow :size="14" /> Agent 编排</span>
+          <span><Route :size="14" /> 阶段调试</span>
+          <span><Boxes :size="14" /> 批量路线</span>
+        </div>
+      </section>
 
-      <EffectCanvas
-        :selected-stage="selectedStage"
-        :latest-run="latestRun"
-        :runs="runs"
-        :focused-run-id="focusedCanvasRunId"
-        :loading="running"
-      />
+      <section class="make-grid" :class="{ 'is-process-collapsed': processCollapsed }">
+        <MakeChat
+          v-model:selected-stage-id="selectedStageId"
+          :stages="stages"
+          :messages="messages"
+          :loading="running"
+          @submit="submitChat"
+        />
 
-      <AgentRunProcess
-        :stages="stages"
-        :selected-stage="selectedStage"
-        :runs="runs"
-        :loading="running"
-        :collapsed="processCollapsed"
-        @update:collapsed="processCollapsed = $event"
-      />
-    </section>
+        <EffectCanvas
+          :selected-stage="selectedStage"
+          :latest-run="latestRun"
+          :runs="runs"
+          :focused-run-id="focusedCanvasRunId"
+          :loading="running"
+        />
+
+        <AgentRunProcess
+          :stages="stages"
+          :selected-stage="selectedStage"
+          :runs="runs"
+          :loading="running"
+          :collapsed="processCollapsed"
+          @update:collapsed="processCollapsed = $event"
+        />
+      </section>
+    </template>
   </main>
 </template>

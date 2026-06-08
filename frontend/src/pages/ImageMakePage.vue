@@ -1,9 +1,10 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import html2canvas from 'html2canvas'
-import { Code2, Download, FileDown, Image, Layers3, LoaderCircle, Send, Sparkles, Upload, X } from 'lucide-vue-next'
+import { CheckCircle2, Code2, Download, FileDown, Image, Layers3, LoaderCircle, Send, Settings2, Sparkles, Upload, X } from 'lucide-vue-next'
 import { ensureBrowserDirectEnabled, loadAgentRuntimeSettings, runBrowserAgent } from '../services/agentRuntime'
 import { getImageMakeRuns, saveImageMakeRun } from '../services/api'
+import { STUDIO_TEMPLATES, getStudioTemplate, getStudioTemplateHref } from '../services/projectHistory'
 import {
   buildProjectJson,
   downloadCompleteProjectPackage,
@@ -48,6 +49,8 @@ const activeHistoryId = ref('')
 const historySyncStatus = ref('')
 const exportStatus = ref('')
 const activeInspectorTab = ref('status')
+const runtimeSettings = ref(loadAgentRuntimeSettings())
+const studioTemplates = STUDIO_TEMPLATES
 
 const design = computed(() => {
   const designs = designRun.value?.designBatchArtifact?.designs || []
@@ -120,13 +123,14 @@ const currentHistoryTitle = computed(() => {
   if (!activeHistoryId.value) return '新项目'
   return historyEntries.value.find((item) => item.id === activeHistoryId.value)?.title || '已保存项目'
 })
+const modelReady = computed(() => Boolean(runtimeSettings.value?.browserDirectEnabled))
 const workflowStepDefinitions = [
   { id: 'requirement', label: '需求', title: '描述页面目标', summary: '写清页面类型、核心内容、视觉方向，并可上传参考图。' },
   { id: 'design', label: '设计', title: '生成 UI 设计图', summary: '生成或确认第一张高保真移动端 UI 设计图。' },
   { id: 'assets', label: '资产', title: '生成页面资产', summary: '由 Gemini 判断切图数量，再生成复杂视觉和专属小图标。' },
-  { id: 'html', label: 'HTML', title: '生成 HTML 页面', summary: '用设计图和资产生成可预览的移动端 HTML。' },
+  { id: 'html', label: 'HTML', title: '生成 HTML 预览', summary: '用设计图和资产生成可预览的移动端 HTML。' },
   { id: 'review', label: '复核', title: '检查并修复结果', summary: '对比设计图和 HTML 截图，必要时补资产并修复代码。' },
-  { id: 'export', label: '导出', title: '导出项目文件', summary: '下载 HTML、素材包、项目 JSON 或 Figma 导入包。' }
+  { id: 'export', label: '导出', title: '导出项目包', summary: '下载 HTML、素材包、项目 JSON 或 Figma 导入包。' }
 ]
 const runningWorkflowStepId = computed(() => {
   if (runningStep.value === 'design') return 'design'
@@ -180,7 +184,7 @@ const primaryWorkflowAction = computed(() => {
   }
   if (currentWorkflowStepId.value === 'html') {
     return {
-      label: runningStep.value === 'html' ? '正在生成 HTML' : htmlSource.value ? '重新生成 HTML' : '生成 HTML 页面',
+      label: runningStep.value === 'html' ? '正在生成 HTML' : htmlSource.value ? '重新生成 HTML 预览' : '生成 HTML 预览',
       hint: '保留当前设计图和 asset-map，用 Gemini + GPT 完成 HTML 闭环。',
       disabled: !canRunHtml.value,
       icon: 'html'
@@ -188,7 +192,7 @@ const primaryWorkflowAction = computed(() => {
   }
   if (currentWorkflowStepId.value === 'review') {
     return {
-      label: runningStep.value === 'html-repair' ? '正在复核修复' : '复核并修复 HTML',
+      label: runningStep.value === 'html-repair' ? '正在复核修复' : '复核并修复',
       hint: '对比设计图和 HTML 截图，必要时补切图并重写当前 HTML。',
       disabled: !canRunHtmlReviewRepair.value,
       icon: 'review'
@@ -196,7 +200,7 @@ const primaryWorkflowAction = computed(() => {
   }
   if (currentWorkflowStepId.value === 'export') {
     return {
-      label: exportStatus.value === '正在打包 HTML 与素材' ? '正在导出素材包' : '导出 HTML 素材包',
+      label: exportStatus.value === '正在打包 HTML 与素材' ? '正在导出项目包' : '导出项目包',
       hint: exportStatus.value || '下载可交接的 HTML、素材和项目说明。',
       disabled: !hasProjectOutput.value || isRunning,
       icon: 'export'
@@ -274,6 +278,33 @@ const artifactSummaryItems = computed(() => [
     label: '最终截图',
     value: htmlScreenshotDataUrl.value ? '已生成' : '未生成',
     detail: htmlScreenshotDataUrl.value ? '用于视觉复核和导出' : ''
+  }
+])
+const deliverableSummaryItems = computed(() => [
+  {
+    label: 'UI 设计图',
+    value: designStatusLabel.value,
+    detail: design.value?.fileName || '生成后作为后续资产与 HTML 的基准图。'
+  },
+  {
+    label: '视觉资产',
+    value: assets.value.length ? `${successfulAssets.value.length}/${assets.value.length} 已生成` : '等待生成',
+    detail: assetPlan.value?.reason || '由 Gemini 自动判断需要的切图数量。'
+  },
+  {
+    label: 'HTML 预览',
+    value: htmlSource.value ? '可预览' : '等待生成',
+    detail: htmlPipelineStatus.value || '生成后会在中间区域实时显示。'
+  },
+  {
+    label: '复核结果',
+    value: activeHtmlReview.value ? `评分 ${activeHtmlReview.value.score || '待定'}` : visualReviewText.value ? '已生成报告' : '等待复核',
+    detail: activeHtmlReview.value?.summary || visualReviewText.value || '对比 UI 设计图与 HTML 截图后输出修复建议。'
+  },
+  {
+    label: '导出包',
+    value: exportStatus.value || (hasProjectOutput.value ? '可导出' : '等待产物'),
+    detail: '支持项目 JSON、HTML 素材包、Figma 导入包和实验 .fig。'
   }
 ])
 const promptInspectorText = computed(() => [
@@ -2738,23 +2769,14 @@ function delay(ms) {
 
 async function initializeImageMakeHistory() {
   loadLocalImageMakeHistory()
-  let restored = false
-  const storedActiveId = window.localStorage.getItem(ACTIVE_HISTORY_STORAGE_KEY) || ''
-  const activeEntry = historyEntries.value.find((entry) => entry.id === storedActiveId) || historyEntries.value[0]
-  if (activeEntry) {
-    restoreImageMakeHistory(activeEntry)
-    restored = true
-  }
+  let remoteEntries = []
 
   try {
     const payload = await getImageMakeRuns(50)
-    const remoteEntries = Array.isArray(payload?.runs) ? payload.runs : []
+    remoteEntries = Array.isArray(payload?.runs) ? payload.runs : []
     if (remoteEntries.length) {
       historyEntries.value = mergeHistoryEntries(historyEntries.value, remoteEntries)
       saveLocalImageMakeHistory()
-      if (!restored) {
-        restoreImageMakeHistory(historyEntries.value[0])
-      }
     }
     historySyncStatus.value = remoteEntries.length ? '历史已从 SQLite 同步' : historySyncStatus.value
   } catch (err) {
@@ -2762,6 +2784,64 @@ async function initializeImageMakeHistory() {
       ? `已读取本地历史，SQLite 同步失败：${err.message}`
       : `SQLite 历史读取失败：${err.message}`
   }
+
+  if (applyTemplateFromQuery()) return
+
+  let restored = false
+  const requestedHistoryId = getImageMakeQueryParam('history')
+  const storedActiveId = window.localStorage.getItem(ACTIVE_HISTORY_STORAGE_KEY) || ''
+  const activeEntry = historyEntries.value.find((entry) => entry.id === requestedHistoryId)
+    || historyEntries.value.find((entry) => entry.id === storedActiveId)
+    || historyEntries.value[0]
+  if (activeEntry) {
+    restoreImageMakeHistory(activeEntry)
+    restored = true
+  }
+
+  if (!restored && historyEntries.value.length) {
+    restoreImageMakeHistory(historyEntries.value[0])
+  }
+}
+
+function getImageMakeQueryParam(key) {
+  if (typeof window === 'undefined') return ''
+  return new URLSearchParams(window.location.search).get(key) || ''
+}
+
+function applyTemplateFromQuery() {
+  const template = getStudioTemplate(getImageMakeQueryParam('template'))
+  if (!template) return false
+  applyStudioTemplate(template)
+  return true
+}
+
+function applyStudioTemplate(template) {
+  if (!template) return
+  activeHistoryId.value = ''
+  clearGeneratedOutputs()
+  prompt.value = template.prompt
+  referenceImages.value = []
+  activeReferenceImageId.value = ''
+  useReferenceImages.value = true
+  htmlReviewNotes.value = ''
+  error.value = ''
+  messages.value = [
+    {
+      id: 'welcome',
+      role: 'assistant',
+      content: `已载入示例模板「${template.title}」。你可以先改需求，再点击顶部主按钮生成 UI 设计图。`
+    }
+  ]
+  window.localStorage.removeItem(ACTIVE_HISTORY_STORAGE_KEY)
+  historySyncStatus.value = '已载入示例模板'
+}
+
+function templateHref(template) {
+  return getStudioTemplateHref(template)
+}
+
+function openModelSettings() {
+  window.dispatchEvent(new CustomEvent('open-model-settings'))
 }
 
 async function persistImageMakeHistory(stage) {
@@ -3167,6 +3247,7 @@ function createExportSnapshot() {
 }
 
 onMounted(() => {
+  runtimeSettings.value = loadAgentRuntimeSettings()
   initializeImageMakeHistory()
 })
 </script>
@@ -3175,9 +3256,17 @@ onMounted(() => {
   <main class="image-make-main">
     <section class="image-make-hero">
       <div>
-        <p class="eyebrow">Image Make</p>
+        <p class="eyebrow">Generation Studio</p>
         <h2>生成工作台</h2>
-        <p>按需求、设计、资产、HTML、复核、导出的顺序推进；高级日志、报告和重跑入口仍保留在细节区域。</p>
+        <p>当前项目：{{ currentHistoryTitle }}。输入页面需求后，按需求、设计、资产、HTML、复核、导出推进，最终获得 UI 设计图、视觉资产、HTML 预览、复核结果和导出包。</p>
+        <div class="studio-hero-meta">
+          <span :class="{ 'is-ready': modelReady }">
+            <CheckCircle2 v-if="modelReady" :size="15" />
+            <Settings2 v-else :size="15" />
+            {{ modelReady ? '模型已就绪' : '建议配置模型' }}
+          </span>
+          <button type="button" @click="openModelSettings">模型设置</button>
+        </div>
       </div>
       <div class="current-step-action">
         <span>当前步骤：{{ currentWorkflowStep.label }}</span>
@@ -3221,8 +3310,8 @@ onMounted(() => {
       <aside class="image-chat-panel">
         <div class="make-panel-head">
           <div>
-            <p class="eyebrow">Requirement</p>
-            <h2>需求与控制</h2>
+            <p class="eyebrow">第一步</p>
+            <h2>描述你要做的页面</h2>
           </div>
           <LoaderCircle v-if="runningStep" class="spin" :size="18" />
         </div>
@@ -3232,6 +3321,19 @@ onMounted(() => {
             <span>页面描述</span>
             <textarea id="image-make-prompt" v-model="prompt" name="imageMakePrompt" rows="7" />
           </label>
+
+          <section class="studio-template-picker" aria-label="示例模板">
+            <div class="reference-upload-head">
+              <span>示例模板</span>
+              <strong>只预填需求</strong>
+            </div>
+            <div>
+              <a v-for="template in studioTemplates" :key="template.id" :href="templateHref(template)" @click.prevent="applyStudioTemplate(template)">
+                <span>{{ template.type }}</span>
+                <strong>{{ template.shortTitle }}</strong>
+              </a>
+            </div>
+          </section>
 
           <section class="reference-upload">
             <div class="reference-upload-head">
@@ -3274,6 +3376,12 @@ onMounted(() => {
             </div>
           </section>
 
+          <details class="studio-advanced-details composer-advanced">
+            <summary>
+              <span>高级设置与历史</span>
+              <small>独立重跑、缺失切图扫描、复核注意项、历史任务</small>
+            </summary>
+
           <section class="auto-asset-plan">
             <div>
               <span>切图数量</span>
@@ -3306,7 +3414,7 @@ onMounted(() => {
 
             <button class="button button-secondary" type="button" :disabled="!canRunAssets" @click="generateAssets">
               <Layers3 :size="16" />
-              {{ runningStep === 'assets' ? 'Gemini 判断并切图中' : assets.length ? '重新生成对应切图' : '生成对应切图' }}
+              {{ runningStep === 'assets' ? 'Gemini 判断并生成资产中' : assets.length ? '重新生成页面资产' : '生成页面资产' }}
             </button>
 
             <button class="button button-secondary" type="button" :disabled="!canRunMissingAssets" @click="scanAndGenerateMissingAssets">
@@ -3316,7 +3424,7 @@ onMounted(() => {
 
             <button class="button button-secondary" type="button" :disabled="!canRunHtml" @click="generateHtml">
               <Code2 :size="16" />
-              {{ runningStep === 'html' ? '生成 HTML 页面中' : htmlSource ? '重新生成 HTML 页面' : '生成 HTML 页面' }}
+              {{ runningStep === 'html' ? '生成 HTML 预览中' : htmlSource ? '重新生成 HTML 预览' : '生成 HTML 预览' }}
             </button>
 
             <label class="html-review-notes-field">
@@ -3334,7 +3442,7 @@ onMounted(() => {
 
             <button class="button button-secondary" type="button" :disabled="!canRunHtmlReviewRepair" @click="reviewAndRepairHtml">
               <Sparkles :size="16" />
-              {{ runningStep === 'html-repair' ? '双模型复核修复中' : '复核并修复 HTML' }}
+              {{ runningStep === 'html-repair' ? '双模型复核修复中' : '复核并修复' }}
             </button>
 
             <p>这些入口用于重跑或补齐细节。当前步骤的主操作已经提升到页面顶部。</p>
@@ -3364,32 +3472,7 @@ onMounted(() => {
             </div>
             <p v-else>生成后的 UI、切图和 HTML 会自动保存到本地与 SQLite。点击历史项可切换查看，并直接继续后续阶段。</p>
           </section>
-
-          <section class="secondary-export-panel" aria-label="导出与交接">
-            <div class="stage-generate-head">
-              <span>导出与交接</span>
-              <strong>{{ exportStatus || '准备就绪' }}</strong>
-            </div>
-            <div class="image-make-export-actions">
-              <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="downloadProjectJson">
-                <FileDown :size="16" />
-                项目 JSON
-              </button>
-              <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="exportCompletePackage">
-                <FileDown :size="16" />
-                HTML 素材包
-              </button>
-              <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="exportFigmaPackage">
-                <FileDown :size="16" />
-                Figma 导入包
-              </button>
-              <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" title="实验导出：Figma 原生 .fig 是非公开格式，此文件用于 OpenPencil/Agent 交接。" @click="exportExperimentalFig">
-                <FileDown :size="16" />
-                实验 .fig
-              </button>
-              <small>{{ exportStatus || '导出 HTML、素材、Figma 插件包和实验 .fig。' }}</small>
-            </div>
-          </section>
+          </details>
         </form>
       </aside>
 
@@ -3443,7 +3526,7 @@ onMounted(() => {
           <header>
             <div>
               <span class="pipeline-icon"><Sparkles :size="16" /></span>
-              <h3>2. 对应切图</h3>
+              <h3>2. 页面资产</h3>
             </div>
             <button
               class="download-link"
@@ -3496,7 +3579,7 @@ onMounted(() => {
           <header>
             <div>
               <span class="pipeline-icon"><Code2 :size="16" /></span>
-              <h3>3. HTML 页面</h3>
+              <h3>3. HTML 预览</h3>
             </div>
             <button class="download-link" type="button" :disabled="!htmlSource" @click="downloadHtml">
               <Download :size="15" />
@@ -3537,11 +3620,51 @@ onMounted(() => {
       <aside class="image-inspector-panel" aria-label="高级细节检查器">
         <div class="image-inspector-head">
           <div>
-            <p class="eyebrow">Inspector</p>
-            <h2>高级细节</h2>
+            <p class="eyebrow">Artifacts</p>
+            <h2>产物状态</h2>
           </div>
-          <span>{{ runningStep ? '执行中' : '可检查' }}</span>
+          <span>{{ runningStep ? '执行中' : currentWorkflowStep.label }}</span>
         </div>
+
+        <section class="deliverable-summary-list" aria-label="产物摘要">
+          <article v-for="item in deliverableSummaryItems" :key="item.label" class="deliverable-summary-item">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+            <p>{{ item.detail }}</p>
+          </article>
+        </section>
+
+        <section class="studio-export-panel" aria-label="导出与交接">
+          <div class="stage-generate-head">
+            <span>导出与交接</span>
+            <strong>{{ exportStatus || '准备就绪' }}</strong>
+          </div>
+          <div class="image-make-export-actions">
+            <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="downloadProjectJson">
+              <FileDown :size="16" />
+              项目 JSON
+            </button>
+            <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="exportCompletePackage">
+              <FileDown :size="16" />
+              HTML 素材包
+            </button>
+            <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" @click="exportFigmaPackage">
+              <FileDown :size="16" />
+              Figma 导入包
+            </button>
+            <button class="button button-secondary" type="button" :disabled="!hasProjectOutput || Boolean(runningStep)" title="实验导出：Figma 原生 .fig 是非公开格式，此文件用于 OpenPencil/Agent 交接。" @click="exportExperimentalFig">
+              <FileDown :size="16" />
+              实验 .fig
+            </button>
+            <small>{{ exportStatus || '产物生成后可导出项目包。' }}</small>
+          </div>
+        </section>
+
+        <details class="studio-advanced-details inspector-advanced">
+          <summary>
+            <span>高级设置与日志</span>
+            <small>prompt / JSON / asset-map / 模型与 Agent 细节</small>
+          </summary>
 
         <div class="inspector-tabs" role="tablist" aria-label="高级细节分类">
           <button
@@ -3571,7 +3694,7 @@ onMounted(() => {
           <article v-if="exportStatus" class="inspector-row">
             <span>导出</span>
             <strong>{{ exportStatus }}</strong>
-            <p>导出动作仍在左侧“导出与交接”区域。</p>
+            <p>导出动作位于产物状态里的“导出与交接”区域。</p>
           </article>
         </section>
 
@@ -3711,6 +3834,7 @@ onMounted(() => {
             <small>{{ item.runId ? `Run ID：${item.runId}` : '尚未运行' }}</small>
           </article>
         </section>
+        </details>
       </aside>
     </section>
   </main>

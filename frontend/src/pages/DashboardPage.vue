@@ -1,13 +1,22 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { ArrowRight, Clock3, FolderKanban, Layers3, Sparkles } from 'lucide-vue-next'
 import {
   getWorkflow,
   getDocument,
+  getImageMakeRuns,
   createProjectPlan,
   runAgent,
   updateStageStatus
 } from '../services/api'
 import { loadAgentRuntimeSettings, runBrowserAgent } from '../services/agentRuntime'
+import {
+  STUDIO_TEMPLATES,
+  getStudioTemplateHref,
+  mapImageMakeProject,
+  mergeImageMakeHistory,
+  readLocalImageMakeHistory
+} from '../services/projectHistory'
 import MetricsStrip from '../components/MetricsStrip.vue'
 import StageBoard from '../components/StageBoard.vue'
 import DocumentLibrary from '../components/DocumentLibrary.vue'
@@ -15,7 +24,7 @@ import AgentConsole from '../components/AgentConsole.vue'
 import ProjectPlanner from '../components/ProjectPlanner.vue'
 
 const loading = ref(true)
-const error = ref('')
+const workflowError = ref('')
 const workflow = ref(null)
 const selectedStageId = ref('')
 const selectedDocument = ref(null)
@@ -23,10 +32,15 @@ const planning = ref(false)
 const projectPlan = ref(null)
 const agentLoading = ref(false)
 const agentRuns = ref([])
+const projectsLoading = ref(true)
+const projectEntries = ref([])
+const projectsSyncMessage = ref('')
 
 const stages = computed(() => workflow.value?.stages || [])
 const documents = computed(() => workflow.value?.documents || [])
 const summary = computed(() => workflow.value?.summary || {})
+const projectCards = computed(() => projectEntries.value.map(mapImageMakeProject))
+const templates = STUDIO_TEMPLATES
 
 const selectedStage = computed(() => {
   return stages.value.find((stage) => stage.id === selectedStageId.value) || stages.value[0]
@@ -34,7 +48,7 @@ const selectedStage = computed(() => {
 
 async function loadWorkflow() {
   loading.value = true
-  error.value = ''
+  workflowError.value = ''
   try {
     workflow.value = await getWorkflow()
     selectedStageId.value = selectedStageId.value || workflow.value.stages[0]?.id || ''
@@ -42,7 +56,7 @@ async function loadWorkflow() {
       await openDocument(workflow.value.documents[0])
     }
   } catch (err) {
-    error.value = err.message
+    workflowError.value = err.message
   } finally {
     loading.value = false
   }
@@ -52,7 +66,7 @@ async function openDocument(document) {
   try {
     selectedDocument.value = await getDocument(document.slug)
   } catch (err) {
-    error.value = err.message
+    workflowError.value = err.message
   }
 }
 
@@ -64,17 +78,17 @@ async function changeStatus(stage, status) {
     })
     workflow.value.summary = summarize(workflow.value.stages)
   } catch (err) {
-    error.value = err.message
+    workflowError.value = err.message
   }
 }
 
 async function submitPlan(form) {
   planning.value = true
-  error.value = ''
+  workflowError.value = ''
   try {
     projectPlan.value = await createProjectPlan(form)
   } catch (err) {
-    error.value = err.message
+    workflowError.value = err.message
   } finally {
     planning.value = false
   }
@@ -82,7 +96,7 @@ async function submitPlan(form) {
 
 async function submitAgentRun(payload) {
   agentLoading.value = true
-  error.value = ''
+  workflowError.value = ''
   try {
     const runtimeSettings = loadAgentRuntimeSettings()
     const stage = stages.value.find((item) => item.id === payload.stageId) || selectedStage.value
@@ -102,7 +116,7 @@ async function submitAgentRun(payload) {
       await changeStatus(statusTarget, run.suggestedStatus)
     }
   } catch (err) {
-    error.value = err.message
+    workflowError.value = err.message
   } finally {
     agentLoading.value = false
   }
@@ -138,60 +152,147 @@ function summarize(items) {
   return { totalStages, completedStages, activeStages, blockedStages, progress }
 }
 
+async function loadProjectCards() {
+  projectsLoading.value = true
+  const localEntries = readLocalImageMakeHistory()
+  projectEntries.value = localEntries
+
+  try {
+    const payload = await getImageMakeRuns(50)
+    const remoteEntries = Array.isArray(payload?.runs) ? payload.runs : []
+    projectEntries.value = mergeImageMakeHistory(localEntries, remoteEntries)
+    projectsSyncMessage.value = remoteEntries.length ? '本地 + SQLite 历史已同步' : '读取本地历史'
+  } catch {
+    projectEntries.value = localEntries
+    projectsSyncMessage.value = localEntries.length ? 'SQLite 同步失败，正在显示本地历史' : '暂无历史项目'
+  } finally {
+    projectsLoading.value = false
+  }
+}
+
+function templateHref(template) {
+  return getStudioTemplateHref(template)
+}
+
 onMounted(() => {
+  loadProjectCards()
   loadWorkflow()
 })
 </script>
 
 <template>
-  <main class="app-main">
-    <section v-if="error" class="notice notice-error">
-      {{ error }}
-    </section>
-
-    <section v-if="loading" class="loading-state">
-      <div class="loading-bar" />
-      <p>正在载入工作流...</p>
-    </section>
-
-    <template v-else>
-      <MetricsStrip :summary="summary" />
-
-      <div class="workspace-grid">
-        <aside class="workspace-side">
-          <DocumentLibrary
-            :documents="documents"
-            :selected-document="selectedDocument"
-            @select="openDocument"
-          />
-        </aside>
-
-        <section class="workspace-center">
-          <StageBoard
-            :stages="stages"
-            :selected-stage="selectedStage"
-            @select="selectedStageId = $event.id"
-            @status-change="changeStatus"
-          />
-        </section>
-
-        <aside class="workspace-side">
-          <AgentConsole
-            :stages="stages"
-            :documents="documents"
-            :selected-stage="selectedStage"
-            :history="agentRuns"
-            :loading="agentLoading"
-            @run="submitAgentRun"
-          />
-
-          <ProjectPlanner
-            :loading="planning"
-            :plan="projectPlan"
-            @submit="submitPlan"
-          />
-        </aside>
+  <main class="app-main projects-main">
+    <section class="projects-hero">
+      <div>
+        <p class="eyebrow">Projects</p>
+        <h2>项目</h2>
+        <p>这里显示每个 AI Design to Web 项目的当前阶段、产物状态和继续入口。旧工作流控制台已降级到下方高级区。</p>
       </div>
-    </template>
+      <a class="button button-primary" href="/image-make">
+        <Sparkles :size="17" />
+        新建原型
+        <ArrowRight :size="17" />
+      </a>
+    </section>
+
+    <section class="project-status-section">
+      <div class="project-section-head">
+        <div>
+          <p class="eyebrow">Project Status</p>
+          <h2>项目状态</h2>
+        </div>
+        <span>{{ projectsSyncMessage || '读取项目历史' }}</span>
+      </div>
+
+      <section v-if="projectsLoading" class="loading-state compact-loading">
+        <div class="loading-bar" />
+        <p>正在读取项目历史...</p>
+      </section>
+
+      <div v-else-if="projectCards.length" class="project-card-grid">
+        <article v-for="project in projectCards" :key="project.id" class="project-card">
+          <header>
+            <span class="project-stage-pill">{{ project.currentStage }}</span>
+            <small><Clock3 :size="13" /> {{ project.updatedLabel }}</small>
+          </header>
+          <div>
+            <h3>{{ project.title }}</h3>
+            <p>{{ project.prompt || '项目需求保存在历史快照中。' }}</p>
+          </div>
+          <footer>
+            <span><Layers3 :size="14" /> {{ project.artifactStatus }}</span>
+            <a class="button button-secondary" :href="project.href">
+              {{ project.continueLabel }}
+              <ArrowRight :size="15" />
+            </a>
+          </footer>
+        </article>
+      </div>
+
+      <div v-else class="template-card-grid" aria-label="示例模板">
+        <a v-for="template in templates" :key="template.id" class="template-card" :href="templateHref(template)">
+          <span>{{ template.type }}</span>
+          <strong>{{ template.title }}</strong>
+          <p>{{ template.description }}</p>
+          <small>预填需求并进入生成工作台</small>
+        </a>
+      </div>
+    </section>
+
+    <details class="internal-workflow-console">
+      <summary>
+        <span><FolderKanban :size="17" /> 内部工作流控制台</span>
+        <small>阶段看板、文档库、Agent 执行台和项目规划器</small>
+      </summary>
+
+      <section v-if="workflowError" class="notice notice-error">
+        {{ workflowError }}
+      </section>
+
+      <section v-if="loading" class="loading-state">
+        <div class="loading-bar" />
+        <p>正在载入工作流...</p>
+      </section>
+
+      <template v-else>
+        <MetricsStrip :summary="summary" />
+
+        <div class="workspace-grid">
+          <aside class="workspace-side">
+            <DocumentLibrary
+              :documents="documents"
+              :selected-document="selectedDocument"
+              @select="openDocument"
+            />
+          </aside>
+
+          <section class="workspace-center">
+            <StageBoard
+              :stages="stages"
+              :selected-stage="selectedStage"
+              @select="selectedStageId = $event.id"
+              @status-change="changeStatus"
+            />
+          </section>
+
+          <aside class="workspace-side">
+            <AgentConsole
+              :stages="stages"
+              :documents="documents"
+              :selected-stage="selectedStage"
+              :history="agentRuns"
+              :loading="agentLoading"
+              @run="submitAgentRun"
+            />
+
+            <ProjectPlanner
+              :loading="planning"
+              :plan="projectPlan"
+              @submit="submitPlan"
+            />
+          </aside>
+        </div>
+      </template>
+    </details>
   </main>
 </template>
