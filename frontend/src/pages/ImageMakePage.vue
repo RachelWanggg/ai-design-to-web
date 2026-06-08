@@ -3310,8 +3310,8 @@ onMounted(() => {
       <aside class="image-chat-panel">
         <div class="make-panel-head">
           <div>
-            <p class="eyebrow">第一步</p>
-            <h2>描述你要做的页面</h2>
+            <p class="eyebrow">Input</p>
+            <h2>输入需求</h2>
           </div>
           <LoaderCircle v-if="runningStep" class="spin" :size="18" />
         </div>
@@ -3477,6 +3477,14 @@ onMounted(() => {
       </aside>
 
       <section class="image-output-panel">
+        <div class="output-section-head">
+          <div>
+            <p class="eyebrow">Preview</p>
+            <h2>生成与预览</h2>
+          </div>
+          <span>{{ currentWorkflowStep.title }}</span>
+        </div>
+
         <article class="pipeline-card">
           <header>
             <div>
@@ -3621,7 +3629,7 @@ onMounted(() => {
         <div class="image-inspector-head">
           <div>
             <p class="eyebrow">Artifacts</p>
-            <h2>产物状态</h2>
+            <h2>产物状态与导出</h2>
           </div>
           <span>{{ runningStep ? '执行中' : currentWorkflowStep.label }}</span>
         </div>

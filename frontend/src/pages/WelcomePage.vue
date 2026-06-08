@@ -81,30 +81,43 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="welcome-flow" aria-label="生成流程">
-        <div>
-          <span>1</span>
-          <strong>需求</strong>
+      <div class="welcome-flow-panel">
+        <div class="welcome-flow-head">
+          <p class="eyebrow">Workflow</p>
+          <h2>生成流程</h2>
+          <p>这些不是入口按钮，而是你从需求到导出会经过的产物阶段。</p>
         </div>
-        <div>
-          <span>2</span>
-          <strong>设计</strong>
-        </div>
-        <div>
-          <span>3</span>
-          <strong>资产</strong>
-        </div>
-        <div>
-          <span>4</span>
-          <strong>HTML</strong>
-        </div>
-        <div>
-          <span>5</span>
-          <strong>复核</strong>
-        </div>
-        <div>
-          <span>6</span>
-          <strong>导出</strong>
+        <div class="welcome-flow" aria-label="生成流程">
+          <div>
+            <span>1</span>
+            <strong>需求</strong>
+            <small>描述页面目标</small>
+          </div>
+          <div>
+            <span>2</span>
+            <strong>设计</strong>
+            <small>生成 UI 设计图</small>
+          </div>
+          <div>
+            <span>3</span>
+            <strong>资产</strong>
+            <small>补齐视觉素材</small>
+          </div>
+          <div>
+            <span>4</span>
+            <strong>HTML</strong>
+            <small>生成页面预览</small>
+          </div>
+          <div>
+            <span>5</span>
+            <strong>复核</strong>
+            <small>检查并修复</small>
+          </div>
+          <div>
+            <span>6</span>
+            <strong>导出</strong>
+            <small>交付项目包</small>
+          </div>
         </div>
       </div>
     </section>
