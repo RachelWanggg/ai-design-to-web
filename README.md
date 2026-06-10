@@ -55,9 +55,13 @@ VITE_API_BASE=http://localhost:8081/api npm run dev
 ```text
 后端：http://localhost:8081
 前端：http://localhost:5173
-Make 页面：http://localhost:5173/make
-单图生成页面：http://localhost:5173/image-make
+开始页：http://localhost:5173/
+生成工作台：http://localhost:5173/image-make
+项目面板：http://localhost:5173/dashboard
+高级工具 / Agent Lab：http://localhost:5173/make
 ```
+
+推荐第一次使用从 `http://localhost:5173/image-make` 进入“生成工作台”：先在右上角“模型设置”确认模型已就绪，再选择一个示例模板或输入页面需求，依次生成 UI 设计图、视觉资产、HTML 预览、复核结果，最后在右侧“导出与交接”下载项目 JSON、HTML 素材包或 Figma 导入包。
 
 真实生成 15 页海鲜配送 App：
 
@@ -79,7 +83,7 @@ http://localhost:5173/make?project=seafood-delivery-15
 | --- | --- | --- |
 | `PORT` | `8080` | Go API 服务端口 |
 | `WORKFLOW_STORE_PATH` | `data/workflow-state.json` | 阶段状态持久化文件，从 `backend` 目录启动时对应 `backend/data/workflow-state.json` |
-| `IMAGE_MAKE_HISTORY_DB_PATH` | `data/image-make-history.sqlite` | 单图生成历史 SQLite 数据库路径，从 `backend` 目录启动时对应 `backend/data/image-make-history.sqlite` |
+| `IMAGE_MAKE_HISTORY_DB_PATH` | `data/image-make-history.sqlite` | 生成工作台历史 SQLite 数据库路径，从 `backend` 目录启动时对应 `backend/data/image-make-history.sqlite` |
 | `WORKFLOW_DOCS_ROOT` | 自动向上查找 | Markdown 模板文档所在目录 |
 | `VITE_API_BASE` | `/api` | 前端调用后端的 API 前缀 |
 | `VITE_API_PROXY_TARGET` | `http://localhost:8081` | Vite dev server 代理到 Go 后端的地址；本机 8080 被占用时使用 8081 |
@@ -102,7 +106,7 @@ http://localhost:5173/make?project=seafood-delivery-15
 说明：
 
 - 阶段状态会保存到 `backend/data/workflow-state.json`，该文件属于本地运行态数据，已加入 `.gitignore`。
-- 单图生成历史会同时保存到浏览器 `localStorage` 和 SQLite，SQLite 默认文件是 `backend/data/image-make-history.sqlite`，该运行态数据库已加入 `.gitignore`。
+- 生成工作台历史会同时保存到浏览器 `localStorage` 和 SQLite，SQLite 默认文件是 `backend/data/image-make-history.sqlite`，该运行态数据库已加入 `.gitignore`。
 - 文档库会读取真实 Markdown 文件内容，例如 `brief.md`、`prd.md`、`workflow-execution-plan.md`。
 - 如果本机 `8080` 已被占用，可以像上面示例一样使用 `8081`。
 - 修改工作区根目录 `.env` 后需要重启前端 dev server，Vite 才会重新读取 `VITE_GPT55_*`、`VITE_GEMINI31_*` 和 `VITE_IMAGE2_*` 配置。
@@ -110,12 +114,15 @@ http://localhost:5173/make?project=seafood-delivery-15
 
 ## 前端功能
 
+- 开始页：`/` 说明默认生成流程、模型就绪状态、最近项目和示例模板。
+- 生成工作台：`/image-make` 是推荐默认路径，从需求或参考图开始，按“需求 → 设计 → 资产 → HTML → 复核 → 导出”推进，并自动保存可恢复项目历史。
+- 项目面板：`/dashboard` 显示本地和 SQLite 保存的项目状态、当前步骤、失败恢复入口和继续生成路径；内部工作流控制台保留在高级折叠区。
+- 高级工具 / Agent Lab：`/make` 面向 Agent 编排、阶段调试、批量设计/切图路线设置和高级实验，不作为新手默认入口。
 - 工作流阶段看板：查看从需求、image2 设计稿、Gemini 审图、图生图切图到图生 HTML 的完整阶段。
 - 对话式执行台：用自然语言调用产品原型 Agent、image2 UI Agent、image2 图生图切图 Agent、Gemini 审图 Agent、图生 HTML 还原 Agent。
-- Make 独立页面：`/make` 提供类似 Figma Make 的三栏工作台，包括对话组件、Agent 执行过程组件和效果画布组件。
-- 单图生成页面：`/image-make` 提供“对话生成单张 UI 图 → 生成对应切图 → 扫描并生成缺失切图 → 用图片和切图生成 HTML”的独立流水线，每个阶段都可下载，并自动保存历史到本地与 SQLite，刷新后可恢复产物。
+- Agent Lab 独立页面：`/make` 提供类似 Figma Make 的三栏工作台，包括对话组件、Agent 执行过程组件和效果画布组件。
 - Figma 自动导入：`/image-make` 可导出 Figma 本地插件导入包，在 Figma 桌面端运行后会自动创建页面，并把 UI 图、HTML 截图、切图网格、设计规格和 token 写入 Figma 画布。
-- HTML/素材完整打包：`/image-make` 可导出完整 HTML + 素材 ZIP、设计节点树和实验 `.fig` 交接文件，方便进入 Figma/OpenPencil/MCP 或代码还原流程继续精修。
+- HTML/素材完整打包：`/image-make` 可导出项目 JSON、完整 HTML + 素材 ZIP、Figma 导入包、设计节点树和实验 `.fig` 交接文件；各导出按钮会说明当前是否已满足导出条件。
 - 细节扫描补切图：Gemini 会先复核 UI 设计图细节，再对比现有 asset-map，识别商品图、Hero、地图路线、状态插画等遗漏的复杂视觉资产，再交给 GPT Image 2 追加生成，避免 HTML 还原时缺图。
 - HTML 还原前复核：重新生成 HTML 前会额外让 Gemini 复核一次设计图比例、区块顺序、真实文案、视觉资产边界和还原锚点，再把复核结果交给 Gemini HTML、GPT-5.5 代码审核和最终视觉 QA。
 - image2 UI 设计稿批量：Stage 3 可设置固定张数或自由规划，逐张调用 image2，并在画布中展示每一张生成的 UI 设计图。

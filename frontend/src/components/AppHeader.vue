@@ -1,5 +1,5 @@
 <script setup>
-import { Github, Images, LayoutDashboard, RefreshCw, WandSparkles, Workflow } from 'lucide-vue-next'
+import { Github, Home, Images, LayoutDashboard, RefreshCw, WandSparkles, Workflow } from 'lucide-vue-next'
 import ModelSettingsPanel from './ModelSettingsPanel.vue'
 
 defineProps({
@@ -18,24 +18,28 @@ defineEmits(['refresh'])
         <Workflow :size="22" />
       </div>
       <div>
-        <p class="eyebrow">AI UI Workflow Console</p>
+        <p class="eyebrow">AI Prototype Studio</p>
         <h1>AI Design to Web</h1>
       </div>
     </div>
 
     <div class="header-actions">
       <nav class="app-nav" aria-label="页面导航">
-        <a class="nav-link" :class="{ 'is-active': activePage === 'dashboard' }" href="/">
-          <LayoutDashboard :size="16" />
-          控制台
-        </a>
-        <a class="nav-link" :class="{ 'is-active': activePage === 'make' }" href="/make">
-          <WandSparkles :size="16" />
-          Make
+        <a class="nav-link" :class="{ 'is-active': activePage === 'welcome' }" href="/">
+          <Home :size="16" />
+          开始
         </a>
         <a class="nav-link" :class="{ 'is-active': activePage === 'image-make' }" href="/image-make">
           <Images :size="16" />
-          单图生成
+          生成工作台
+        </a>
+        <a class="nav-link" :class="{ 'is-active': activePage === 'dashboard' }" href="/dashboard">
+          <LayoutDashboard :size="16" />
+          最近任务
+        </a>
+        <a class="nav-link nav-link-muted" :class="{ 'is-active': activePage === 'make' }" href="/make">
+          <WandSparkles :size="16" />
+          Agent Lab
         </a>
       </nav>
       <a class="icon-link" href="https://github.com" target="_blank" rel="noreferrer" title="GitHub">
