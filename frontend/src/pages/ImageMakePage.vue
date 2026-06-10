@@ -128,14 +128,24 @@ const assetCountLabel = computed(() => {
   return 'Gemini 自动判断'
 })
 const designDownloadUrl = computed(() => design.value?.downloadUrl || design.value?.resultUrl || '')
+const activeHistoryEntry = computed(() => {
+  if (!activeHistoryId.value) return null
+  return historyEntries.value.find((item) => item.id === activeHistoryId.value) || null
+})
 const currentHistoryTitle = computed(() => {
-  if (!activeHistoryId.value) return '新项目'
-  return historyEntries.value.find((item) => item.id === activeHistoryId.value)?.title || '已保存项目'
+  if (!activeHistoryId.value) return '新任务'
+  return activeHistoryEntry.value?.title || '已保存任务'
+})
+const currentTaskPersistenceHint = computed(() => {
+  if (activeHistoryId.value) {
+    return '继续生成或导出会更新当前历史快照；“新建任务”只清空工作台，不删除这条历史。'
+  }
+  return '当前是新任务，首次生成后会自动保存到浏览器本地历史，并在后端可用时同步到 SQLite。'
 })
 const modelReady = computed(() => Boolean(runtimeSettings.value?.browserDirectEnabled))
 const currentProjectModel = computed(() => normalizeImageMakeProject({
   id: activeHistoryId.value || 'current-project',
-  title: currentHistoryTitle.value === '新项目' ? titleFromPrompt(prompt.value) : currentHistoryTitle.value,
+  title: currentHistoryTitle.value === '新任务' ? titleFromPrompt(prompt.value) : currentHistoryTitle.value,
   prompt: prompt.value,
   stage: currentWorkflowStepId.value,
   designUrl: design.value?.resultUrl || '',
@@ -166,7 +176,7 @@ const workflowStepDefinitions = [
   { id: 'assets', label: '资产', title: '生成页面资产', summary: '由 Gemini 判断切图数量，再生成复杂视觉和专属小图标。' },
   { id: 'html', label: 'HTML', title: '生成 HTML 预览', summary: '用设计图和资产生成可预览的移动端 HTML。' },
   { id: 'review', label: '复核', title: '检查并修复结果', summary: '对比设计图和 HTML 截图，必要时补资产并修复代码。' },
-  { id: 'export', label: '导出', title: '导出项目包', summary: '下载 HTML、素材包、项目 JSON 或 Figma 导入包。' }
+  { id: 'export', label: '导出', title: '导出任务包', summary: '下载 HTML、素材包、项目 JSON 或 Figma 导入包。' }
 ]
 const runningWorkflowStepId = computed(() => {
   if (runningStep.value === 'design') return 'design'
@@ -241,8 +251,8 @@ const primaryWorkflowAction = computed(() => {
   }
   if (currentWorkflowStepId.value === 'export') {
     return {
-      label: exportStatus.value === '正在打包 HTML 与素材' ? '正在导出项目包' : '导出项目包',
-      hint: exportStatus.value || '下载可交接的 HTML、素材和项目说明。',
+      label: exportStatus.value === '正在打包 HTML 与素材' ? '正在导出任务包' : '导出任务包',
+      hint: exportStatus.value || '下载可交接的 HTML、素材和任务说明。',
       disabled: !hasProjectOutput.value || isRunning,
       icon: 'export'
     }
@@ -286,7 +296,7 @@ const inspectorStatusItems = computed(() => [
   {
     label: '历史',
     value: currentHistoryTitle.value,
-    detail: historySyncStatus.value || '本地 + SQLite'
+    detail: currentTaskPersistenceHint.value
   }
 ])
 const artifactSummaryItems = computed(() => [
@@ -345,7 +355,7 @@ const deliverableSummaryItems = computed(() => [
   {
     label: '导出包',
     value: exportStatus.value || exportReadiness.value.summary,
-    detail: '项目 JSON、HTML 素材包、Figma 导入包和实验 .fig 有不同就绪条件。'
+    detail: '项目 JSON、HTML 素材包、Figma 导入包和实验 .fig 有不同用途与就绪条件。'
   }
 ])
 const exportActionItems = computed(() => [
@@ -2902,7 +2912,7 @@ function applyStudioTemplate(template) {
     {
       id: 'welcome',
       role: 'assistant',
-      content: `已载入示例模板「${template.title}」。你可以先改需求，再点击顶部主按钮生成 UI 设计图。`
+      content: `已载入示例模板「${template.title}」。你可以先改需求，再点击顶部主按钮生成 UI 设计图。模板不会自动生成，也不会覆盖历史任务。`
     }
   ]
   window.localStorage.removeItem(ACTIVE_HISTORY_STORAGE_KEY)
@@ -3072,12 +3082,12 @@ function restoreImageMakeHistory(entry) {
     {
       id: 'welcome',
       role: 'assistant',
-      content: '输入你想要的页面，我会先用 image2 生成单张 UI 设计图，再基于这张图生成切图资产，最后用设计图和切图生成 HTML。'
+      content: '已恢复历史任务。你可以查看现有产物，或从当前步骤继续生成。'
     },
     {
       id: `restored-${entry.id}`,
       role: 'assistant',
-      content: `已恢复历史项目：${entry.title || entry.prompt || entry.id}`
+      content: `当前打开：${entry.title || entry.prompt || entry.id}。继续操作会更新这条历史快照；如需保留当前结果，请先新建任务。`
     }
   ]
   window.localStorage.setItem(ACTIVE_HISTORY_STORAGE_KEY, entry.id)
@@ -3098,7 +3108,7 @@ function startNewImageMakeTask() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: '已切换到新任务。输入或调整页面描述后，可以生成新的 UI 设计图。'
+      content: '已切换到新任务。输入或调整页面描述后，可以生成新的 UI 设计图；已有历史记录不会被删除。'
     }
   ]
   window.localStorage.removeItem(ACTIVE_HISTORY_STORAGE_KEY)
@@ -3150,7 +3160,7 @@ function createHistoryId() {
 
 function titleFromPrompt(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
-  if (!text) return '未命名单图项目'
+  if (!text) return '未命名任务'
   return text.length > 24 ? `${text.slice(0, 24)}...` : text
 }
 
@@ -3339,7 +3349,7 @@ function runPrimaryWorkflowAction() {
 
 function createExportSnapshot() {
   return {
-    title: currentHistoryTitle.value === '新项目' ? titleFromPrompt(prompt.value) : currentHistoryTitle.value,
+    title: currentHistoryTitle.value === '新任务' ? titleFromPrompt(prompt.value) : currentHistoryTitle.value,
     prompt: prompt.value,
     useReferenceImages: useReferenceImages.value,
     referenceImages: referenceImages.value.map((image) => ({
@@ -3377,7 +3387,8 @@ onMounted(() => {
       <div>
         <p class="eyebrow">Generation Studio</p>
         <h2>生成工作台</h2>
-        <p>当前项目：{{ currentHistoryTitle }}。输入页面需求后，按需求、设计、资产、HTML、复核、导出推进，最终获得 UI 设计图、视觉资产、HTML 预览、复核结果和导出包。</p>
+        <p>当前任务：{{ currentHistoryTitle }}。输入页面需求后，按需求、设计、资产、HTML、复核、导出推进，最终获得 UI 设计图、视觉资产、HTML 预览、复核结果和导出包。</p>
+        <p class="studio-history-note">{{ currentTaskPersistenceHint }}</p>
         <div class="studio-hero-meta">
           <span :class="{ 'is-ready': modelReady }">
             <CheckCircle2 v-if="modelReady" :size="15" />
@@ -3539,6 +3550,7 @@ onMounted(() => {
               <Sparkles :size="16" />
               新建任务
             </button>
+            <p>新建任务只清空当前工作台，不会删除已保存的历史记录。</p>
 
             <button class="button button-secondary" type="button" :disabled="!canRunDesign" @click="generateDesign">
               <Send :size="16" />
@@ -3599,8 +3611,8 @@ onMounted(() => {
                 :class="{ 'is-active': entry.id === activeHistoryId }"
                 @click="restoreImageMakeHistory(entry)"
               >
-                <span>{{ entry.title || entry.prompt || '未命名项目' }}</span>
-                <small>{{ historyStageLabel(entry) }} · {{ historyContinueLabel(entry) }} · {{ formatHistoryTime(entry.updatedAt || entry.createdAt) }}</small>
+                <span>{{ entry.title || entry.prompt || '未命名任务' }}</span>
+                <small>{{ entry.id === activeHistoryId ? '当前打开 · ' : '' }}{{ historyStageLabel(entry) }} · {{ historyContinueLabel(entry) }} · {{ formatHistoryTime(entry.updatedAt || entry.createdAt) }}</small>
               </button>
             </div>
             <p v-else>生成后的 UI、切图和 HTML 会自动保存到本地与 SQLite。点击历史项可切换查看，并直接继续后续阶段。</p>
@@ -3623,6 +3635,7 @@ onMounted(() => {
             <span>{{ lastFailure ? '恢复路径' : '继续路径' }}</span>
             <strong>{{ currentProjectModel.nextAction.label }}</strong>
             <p>{{ currentContinueHint }}</p>
+            <small>{{ currentTaskPersistenceHint }}</small>
           </div>
           <button class="button button-secondary" type="button" :disabled="primaryWorkflowAction.disabled" @click="runPrimaryWorkflowAction">
             {{ lastFailure?.retryAction || currentProjectModel.nextAction.label }}

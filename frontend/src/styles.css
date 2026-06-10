@@ -2823,6 +2823,15 @@ li {
   background: #fff;
 }
 
+.studio-history-note {
+  max-width: 760px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 19px;
+}
+
 .current-step-action {
   display: grid;
   gap: 8px;
@@ -2965,17 +2974,19 @@ li {
 }
 
 .image-make-export-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   min-width: 0;
   max-width: none;
 }
 
 .image-make-export-actions .button {
+  width: 100%;
+  min-width: 0;
   min-height: 38px;
   padding-inline: 12px;
+  justify-content: flex-start;
 }
 
 .image-make-export-actions small {
@@ -2989,13 +3000,13 @@ li {
 
 .export-action-card {
   display: grid;
-  flex: 1 1 calc(50% - 8px);
+  grid-template-rows: 74px minmax(54px, auto);
   gap: 6px;
-  min-width: 138px;
+  min-width: 0;
 }
 
 .export-action-card.is-experimental {
-  padding-top: 2px;
+  padding-top: 0;
 }
 
 .export-action-card.is-experimental .button {
@@ -3005,6 +3016,7 @@ li {
 }
 
 .export-status-copy {
+  grid-column: 1 / -1;
   padding-top: 2px;
 }
 
@@ -3665,9 +3677,7 @@ li {
 }
 
 .studio-export-panel .image-make-export-actions .button {
-  flex: 1 1 calc(50% - 8px);
-  justify-content: flex-start;
-  min-width: 138px;
+  min-height: 74px;
 }
 
 .secondary-export-panel {
@@ -3680,9 +3690,7 @@ li {
 }
 
 .secondary-export-panel .image-make-export-actions .button {
-  flex: 1 1 calc(50% - 8px);
-  justify-content: flex-start;
-  min-width: 136px;
+  min-height: 74px;
 }
 
 .html-review-notes-field {
@@ -3956,6 +3964,13 @@ li {
   color: var(--muted);
   font-size: 12px;
   line-height: 18px;
+}
+
+.continue-path-card small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 17px;
 }
 
 .design-footer > div {
@@ -4799,7 +4814,7 @@ li {
   }
 
   .image-make-export-actions {
-    justify-content: stretch;
+    grid-template-columns: 1fr;
     min-width: 0;
     max-width: none;
   }
@@ -4809,7 +4824,7 @@ li {
   }
 
   .export-action-card {
-    flex-basis: 100%;
+    grid-template-rows: 74px auto;
   }
 
   .image-make-export-actions small {

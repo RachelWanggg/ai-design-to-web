@@ -309,17 +309,17 @@ onMounted(async () => {
 
     <section v-if="loading" class="loading-state">
       <div class="loading-bar" />
-      <p>正在载入 Make 工作台...</p>
+      <p>正在载入 Agent Lab...</p>
     </section>
 
     <template v-else>
       <section class="advanced-tool-hero">
         <div>
-          <p class="eyebrow">Advanced Tool</p>
-          <h2>高级工具</h2>
+          <p class="eyebrow">Agent Lab</p>
+          <h2>Agent Lab</h2>
           <p>用于 Agent 编排、阶段调试、批量设计/切图路线设置。新手默认生成路径请使用“生成工作台”。</p>
         </div>
-        <div class="advanced-tool-tags" aria-label="高级工具能力">
+        <div class="advanced-tool-tags" aria-label="Agent Lab 能力">
           <span><Workflow :size="14" /> Agent 编排</span>
           <span><Route :size="14" /> 阶段调试</span>
           <span><Boxes :size="14" /> 批量路线</span>

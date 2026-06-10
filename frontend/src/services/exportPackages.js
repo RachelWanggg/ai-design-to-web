@@ -642,7 +642,7 @@ function buildHtmlPackageReadme(snapshot, collected) {
   return [
     `# ${snapshot.title || 'AI Design to Web 导出包'}`,
     '',
-    '这个 ZIP 包包含当前任务的 HTML、UI 设计图、切图、设计规格、复核报告和可交接给 Figma/OpenPencil 的节点树。',
+    '这个 ZIP 包包含当前生成任务的 HTML、UI 设计图、切图、设计规格、复核报告和可交接给 Figma/OpenPencil 的节点树。',
     '',
     '## 文件',
     '',
@@ -650,7 +650,7 @@ function buildHtmlPackageReadme(snapshot, collected) {
     '- `assets/design/`：第一步 UI 设计图。',
     '- `assets/generated/`：image2 生成的切图资产。',
     '- `assets/preview/`：HTML 预览截图，存在时会导出。',
-    '- `metadata/project.json`：完整项目数据。',
+    '- `metadata/project.json`：当前任务快照，便于调试、迁移或后续 Agent 读取；它不是服务器上的项目记录。',
     '- `metadata/design-node-tree.json`：面向 Figma/OpenPencil/Agent 的结构化节点草稿。',
     '',
     collected.external.length
@@ -659,7 +659,7 @@ function buildHtmlPackageReadme(snapshot, collected) {
     '',
     '## Figma 使用建议',
     '',
-    '更推荐下载“Figma 导入包”，里面带有本地 Figma 插件，可以把设计图、HTML 截图和切图作为可整理的画布素材导入。'
+    '更推荐下载“Figma 导入包”，里面带有本地 Figma 插件，可以把设计图、HTML 截图和切图作为可整理的画布素材导入。HTML 包本身不是 Figma 原生导入格式。'
   ].join('\n')
 }
 
@@ -667,7 +667,7 @@ function buildFigmaPackageReadme(snapshot) {
   return [
     `# ${snapshot.title || 'AI Design to Web Figma 导入包'}`,
     '',
-    '这个包用于把当前任务添加到 Figma：包含导入数据、节点树、设计 token、HTML 源码、素材，以及一个本地 Figma 插件。',
+    '这个包用于把当前生成任务添加到 Figma：包含导入数据、节点树、设计 token、HTML 源码、素材，以及一个本地 Figma 插件。',
     '',
     '## 使用方式',
     '',
@@ -677,7 +677,7 @@ function buildFigmaPackageReadme(snapshot) {
     '4. 选择 `figma-plugin/manifest.json`。',
     '5. 运行插件 “AI Design to Web Importer”，点击 Import current export。',
     '',
-    '插件会创建一个页面，放入 UI 设计图、HTML 效果截图、切图网格和可编辑的规格骨架。HTML 本身不能直接变成完全可编辑 Figma 图层，但这个包已经把后续 Agent/Figma 精修所需材料放在一起。',
+    '插件会创建一个页面，放入 UI 设计图、HTML 效果截图、切图网格和可编辑的规格骨架。HTML 本身不能直接变成完全可编辑 Figma 图层；这个包的目标是把后续 Agent/Figma 精修所需材料集中到同一个 Figma 页面。',
     '',
     '## 关于 .fig',
     '',

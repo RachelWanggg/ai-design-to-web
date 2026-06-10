@@ -35,11 +35,11 @@ defineEmits(['refresh'])
         </a>
         <a class="nav-link" :class="{ 'is-active': activePage === 'dashboard' }" href="/dashboard">
           <LayoutDashboard :size="16" />
-          项目
+          最近任务
         </a>
         <a class="nav-link nav-link-muted" :class="{ 'is-active': activePage === 'make' }" href="/make">
           <WandSparkles :size="16" />
-          高级工具
+          Agent Lab
         </a>
       </nav>
       <a class="icon-link" href="https://github.com" target="_blank" rel="noreferrer" title="GitHub">

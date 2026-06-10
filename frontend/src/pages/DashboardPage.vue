@@ -161,10 +161,10 @@ async function loadProjectCards() {
     const payload = await getImageMakeRuns(50)
     const remoteEntries = Array.isArray(payload?.runs) ? payload.runs : []
     projectEntries.value = mergeImageMakeHistory(localEntries, remoteEntries)
-    projectsSyncMessage.value = remoteEntries.length ? '本地 + SQLite 历史已同步' : '读取本地历史'
+    projectsSyncMessage.value = remoteEntries.length ? '历史记录已同步' : '读取本地历史'
   } catch {
     projectEntries.value = localEntries
-    projectsSyncMessage.value = localEntries.length ? 'SQLite 同步失败，正在显示本地历史' : '暂无历史项目'
+    projectsSyncMessage.value = localEntries.length ? '同步失败，正在显示本地历史' : '暂无历史记录'
   } finally {
     projectsLoading.value = false
   }
@@ -172,6 +172,10 @@ async function loadProjectCards() {
 
 function templateHref(template) {
   return getStudioTemplateHref(template)
+}
+
+function historyTitle(project) {
+  return project.title === '未命名项目' || project.title === '未命名任务' ? '未命名任务' : project.title
 }
 
 onMounted(() => {
@@ -184,9 +188,9 @@ onMounted(() => {
   <main class="app-main projects-main">
     <section class="projects-hero">
       <div>
-        <p class="eyebrow">Projects</p>
-        <h2>项目</h2>
-        <p>这里显示每个 AI Design to Web 项目的当前阶段、产物状态和继续入口。旧工作流控制台已降级到下方高级区。</p>
+        <p class="eyebrow">Recent Work</p>
+        <h2>最近任务</h2>
+        <p>这里显示生成工作台自动保存的历史任务、当前阶段、产物状态和继续入口。历史来自浏览器本地记录与 SQLite，不提供项目管理动作。</p>
       </div>
       <a class="button button-primary" href="/image-make">
         <Sparkles :size="17" />
@@ -198,15 +202,15 @@ onMounted(() => {
     <section class="project-status-section">
       <div class="project-section-head">
         <div>
-          <p class="eyebrow">Project Status</p>
-          <h2>项目状态</h2>
+          <p class="eyebrow">Generation History</p>
+          <h2>生成历史</h2>
         </div>
-        <span>{{ projectsSyncMessage || '读取项目历史' }}</span>
+        <span>{{ projectsSyncMessage || '读取历史记录' }}</span>
       </div>
 
       <section v-if="projectsLoading" class="loading-state compact-loading">
         <div class="loading-bar" />
-        <p>正在读取项目历史...</p>
+        <p>正在读取历史记录...</p>
       </section>
 
       <div v-else-if="projectCards.length" class="project-card-grid">
@@ -221,9 +225,9 @@ onMounted(() => {
             <small><Clock3 :size="13" /> {{ project.updatedLabel }}</small>
           </header>
           <div>
-            <h3>{{ project.title }}</h3>
+            <h3>{{ historyTitle(project) }}</h3>
             <p v-if="project.failureState">{{ project.failureState.label }}失败：{{ project.failureState.message }}</p>
-            <p v-else>{{ project.prompt || '项目需求保存在历史快照中。' }}</p>
+            <p v-else>{{ project.prompt || '任务需求保存在历史快照中。' }}</p>
           </div>
           <footer>
             <span><Layers3 :size="14" /> {{ project.artifactStatus }}</span>

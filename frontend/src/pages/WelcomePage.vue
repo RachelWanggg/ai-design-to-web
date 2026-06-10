@@ -57,7 +57,7 @@ onMounted(() => {
         <h2>输入产品或页面需求，生成可交付网页原型</h2>
         <p>
           系统会按顺序产出 UI 设计图、视觉资产、HTML 预览、复核结果和导出包。
-          默认入口是生成工作台；Agent 编排和阶段调试保留在高级工具里。
+          默认入口是生成工作台；Agent 编排和阶段调试保留在 Agent Lab。
         </p>
         <div class="welcome-actions">
           <a class="button button-primary welcome-primary-action" href="/image-make">
@@ -67,7 +67,7 @@ onMounted(() => {
           </a>
           <a class="button button-secondary" href="/dashboard">
             <FolderKanban :size="17" />
-            查看项目
+            查看最近任务
           </a>
         </div>
         <div class="welcome-model-status" :class="{ 'is-ready': modelReady }">
@@ -116,7 +116,7 @@ onMounted(() => {
           <div>
             <span>6</span>
             <strong>导出</strong>
-            <small>交付项目包</small>
+            <small>交付任务包</small>
           </div>
         </div>
       </div>
@@ -142,11 +142,11 @@ onMounted(() => {
           <LayoutDashboard :size="20" />
         </div>
         <div>
-          <h3>项目</h3>
+          <h3>最近任务</h3>
           <p>查看本机和 SQLite 保存的生成历史，按当前阶段继续完成产物。</p>
         </div>
         <a class="button button-secondary" href="/dashboard">
-          查看项目
+          查看任务
         </a>
       </article>
 
@@ -155,22 +155,22 @@ onMounted(() => {
           <Boxes :size="20" />
         </div>
         <div>
-          <h3>高级工具</h3>
+          <h3>Agent Lab</h3>
           <p>用于 Agent 编排、阶段调试、批量设计/切图路线设置，不作为新手默认入口。</p>
         </div>
         <a class="button button-secondary" href="/make">
-          进入高级工具
+          进入 Agent Lab
         </a>
       </article>
     </section>
 
-    <section class="welcome-recents" aria-label="最近项目">
+    <section class="welcome-recents" aria-label="最近任务">
       <div class="welcome-section-head">
         <div>
-          <p class="eyebrow">{{ historySyncMessage || 'Projects' }}</p>
-          <h2>最近项目</h2>
+          <p class="eyebrow">{{ historySyncMessage || 'Recent Work' }}</p>
+          <h2>最近任务</h2>
         </div>
-        <a class="button button-secondary" href="/dashboard">查看全部项目</a>
+        <a class="button button-secondary" href="/dashboard">查看全部任务</a>
       </div>
 
       <div v-if="hasRecentProjects" class="welcome-recent-list">

@@ -72,7 +72,7 @@ export function normalizeImageMakeProject(entry) {
   const hasReview = Boolean(data.htmlDualReview || data.visualReview || data.codeReview)
   const designUrl = entry?.designUrl || data.design?.resultUrl || data.design?.localUrl || ''
   const prompt = entry?.prompt || data.prompt || ''
-  const title = entry?.title || titleFromPrompt(prompt) || '未命名项目'
+  const title = entry?.title || titleFromPrompt(prompt) || '未命名任务'
   const updatedAt = entry?.updatedAt || data.savedAt || entry?.createdAt || ''
   const id = entry?.id || `${title}-${updatedAt}`
   const currentStep = getProjectStep({ htmlReady, assetCount, designUrl, hasReview })
@@ -168,22 +168,22 @@ function getExportReadiness({ designUrl, assetCount, successfulAssetCount, htmlR
     projectJson: {
       ready: hasOutput,
       label: hasOutput ? '可导出项目 JSON' : '生成任一产物后可导出项目 JSON',
-      reason: hasOutput ? '包含当前项目快照和复核信息。' : '需要先生成 UI 设计图、资产或 HTML。'
+      reason: hasOutput ? '包含当前任务快照和复核信息，不是服务器项目记录。' : '需要先生成 UI 设计图、资产或 HTML。'
     },
     htmlPackage: {
       ready: htmlReady,
       label: htmlReady ? '可导出 HTML 素材包' : '生成 HTML 后可导出 HTML 素材包',
-      reason: htmlReady ? '包含 index.html、素材、manifest 和项目说明。' : '至少需要 HTML 预览。'
+      reason: htmlReady ? '包含 index.html、素材、manifest 和任务说明。' : '至少需要 HTML 预览。'
     },
     figmaPackage: {
       ready: Boolean(designUrl && (htmlReady || successfulAssetCount)),
       label: designUrl && (htmlReady || successfulAssetCount) ? '可导出 Figma 导入包' : '设计图加 HTML 或资产后可导出 Figma 导入包',
-      reason: designUrl ? 'Figma 包会带入设计图、资产、HTML 截图和节点骨架。' : '至少需要 UI 设计图。'
+      reason: designUrl ? '推荐的 Figma 路线：用本地插件导入设计图、资产、HTML 截图和节点骨架。' : '至少需要 UI 设计图。'
     },
     experimentalFig: {
       ready: hasOutput,
       label: hasOutput ? '可导出实验 .fig 交接文件' : '生成任一产物后可导出实验 .fig',
-      reason: '实验格式用于 Agent/OpenPencil 交接，不等同于 Figma 原生文件。'
+      reason: '实验格式用于 Agent/OpenPencil 交接，不等同于 Figma 原生文件，也不保证能被 Figma 打开。'
     },
     summary: htmlReady
       ? 'HTML 素材包已就绪'
